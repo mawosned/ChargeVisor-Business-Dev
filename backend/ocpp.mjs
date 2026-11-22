@@ -5,6 +5,7 @@ import {allowsTestRfid,captureTestRfid,ensureTestRfidSchema,handleTestRfid,valid
 import {createPhysicalOcpp,ensurePhysicalOcppSchema} from './physical-ocpp.mjs';
 import {chargingReport} from './charging-report.mjs';
 import {applyLuminaFreecharge,handleFreechargeConfiguration} from './freecharge.mjs';
+import {validateOcppCsmsCommand} from './ocpp-command-catalog.mjs';
 import {createOcppTestVerifier} from './ocpp-test-verifier.mjs';
 
 const now=()=>new Date().toISOString();
@@ -206,24 +207,47 @@ export function createOcppBridge(pool,env=process.env){
         }
         reply({idTagInfo:{status:'Accepted'}});return;
       }
+      case 'DiagnosticsStatusNotification': {
+        if(!['Idle','Uploaded','UploadFailed','Uploading'].includes(p.status)){
+          fail('PropertyConstraintViolation','Ungültiger Diagnose-Status');return;
+        }
+        await event(ctx,c.action,{status:p.status});reply({});return;
+      }
+      case 'FirmwareStatusNotification': {
+        if(!['Downloaded','DownloadFailed','Downloading','Idle','InstallationFailed','Installing','Installed'].includes(p.status)){
+          fail('PropertyConstraintViolation','Ungültiger Firmware-Status');return;
+        }
+        await event(ctx,c.action,{status:p.status});reply({});return;
+      }
+      case 'DataTransfer': {
+        if(typeof p.vendorId!=='string'||!p.vendorId.trim()||p.vendorId.length>255||
+           (p.messageId!==undefined&&(typeof p.messageId!=='string'||p.messageId.length>50))){
+          fail('PropertyConstraintViolation','Ungültige Hersteller-Nachricht');return;
+        }
+        // No proprietary vendor behavior is presumed to be supported.
+        // Never store arbitrary vendor data (which can contain secrets).
+        await event(ctx,c.action,{vendorId:p.vendorId,messageId:p.messageId||null,status:'UnknownVendorId'});
+        reply({status:'UnknownVendorId'});return;
+      }
       default:fail('NotSupported','OCPP-Aktion noch nicht implementiert');
       }
     }catch(e){console.error('ChargeVisor OCPP processing error:',e.code||e.message);fail('InternalError','Interner Fehler');}
   }
-  function sendCommand(ctx,action,payload){
-    if(ctx.ws.readyState!==WebSocket.OPEN)return Promise.resolve('Disconnected');
+  function sendCommand(ctx,action,payload,{raw=false}={}){
+    if(ctx.ws.readyState!==WebSocket.OPEN)
+      return Promise.resolve(raw?{ok:false,error:'Disconnected'}:'Disconnected');
     return new Promise(resolve=>{
       const id=randomUUID();
-      const timer=setTimeout(()=>finish('Timeout'),6000);
+      const timer=setTimeout(()=>finish(raw?{ok:false,error:'Timeout'}:'Timeout'),6000);
       function finish(status){
         if(ctx.pendingCommand?.id!==id)return;
         ctx.pendingCommand=null;
         clearTimeout(timer);
         resolve(status);
       }
-      ctx.pendingCommand={id,finish};
+      ctx.pendingCommand={id,finish,raw};
       ctx.ws.send(JSON.stringify([2,id,action,payload]),error=>{
-        if(error)finish('Disconnected');
+        if(error)finish(raw?{ok:false,error:'Disconnected'}:'Disconnected');
       });
     });
   }
@@ -232,12 +256,39 @@ export function createOcppBridge(pool,env=process.env){
     if(!pending||pending.id!==frame[1])return;
     if(frame[0]===4){
       const known=frame.length===5&&['NotSupported','NotImplemented'].includes(frame[2]);
-      pending.finish(known?'NotSupported':'CommandError');
+      if(pending.raw)pending.finish({ok:false,error:known?'NotSupported':'CommandError',
+        errorCode:typeof frame[2]==='string'?frame[2]:null});
+      else pending.finish(known?'NotSupported':'CommandError');
+      return;
+    }
+    if(pending.raw){
+      const response=frame[2];
+      if(frame.length!==3||!response||typeof response!=='object'||Array.isArray(response))
+        pending.finish({ok:false,error:'InvalidResponse'});
+      else pending.finish({ok:true,response});
       return;
     }
     const status=frame[2]?.status;
     const valid=frame.length===3&&['Accepted','Rejected','RebootRequired','NotSupported'].includes(status);
     pending.finish(valid?status:'InvalidResponse');
+  }
+  async function advancedCommand(station,action,payload){
+    const validation=validateOcppCsmsCommand(action,payload);
+    if(!validation.ok)return {code:400,error:validation.error};
+    const ctx=active.get(station.identity);
+    if(!ctx||!ctx.simulated||ctx.tenantId!==station.tenant_id||
+       ctx.stationId!==station.station_id||ctx.ws.readyState!==WebSocket.OPEN)
+      return {code:409,error:'Test-Wallbox ist nicht verbunden'};
+    if(ctx.pendingCommand||ctx.controlling||ctx.configuringFreecharge||ctx.advancedInProgress)
+      return {code:409,error:'Die Test-Wallbox verarbeitet bereits einen Befehl'};
+    ctx.advancedInProgress=true;
+    try{
+      const outcome=await sendCommand(ctx,action,payload,{raw:true});
+      if(!outcome.ok)return {code:409,error:outcome.error,errorCode:outcome.errorCode||null};
+      // Only audit the action and result. Do not log tokens, RFID IDs or URLs.
+      await event(ctx,'CSMS.'+action,{responseStatus:outcome.response.status||null});
+      return {code:200,action,response:outcome.response};
+    }finally{ctx.advancedInProgress=false;}
   }
   async function configureFreecharge(point){
     const ctx=active.get(point.ocpp_identity);
@@ -355,7 +406,7 @@ export function createOcppBridge(pool,env=process.env){
         });
         ws.on('close',()=>{
           clearInterval(ping);
-          ctx.pendingCommand?.finish('Disconnected');
+          ctx.pendingCommand?.finish(ctx.pendingCommand.raw?{ok:false,error:'Disconnected'}:'Disconnected');
           queue.then(()=>state(ctx,{connected:false,action:'Disconnected'}))
             .catch(e=>console.error('OCPP close:',e.code||e.message))
             .finally(()=>{if(active.get(identity)===ctx)active.delete(identity);});
@@ -406,7 +457,7 @@ export function createOcppBridge(pool,env=process.env){
     virtualTokens.set(identity,{secret,until:Date.now()+120000});
     return secret;
   }
-  return {upgrade,simulate,active,issueVirtualToken,physical,configureFreecharge,control};
+  return {upgrade,simulate,active,issueVirtualToken,physical,configureFreecharge,control,advancedCommand};
 }
 export function createOcppApi({pool,getActor,bridge,port,env}){
   const origin=String(env.CV_PUBLIC_URL||'').replace(/\/$/,'');
@@ -418,6 +469,39 @@ export function createOcppApi({pool,getActor,bridge,port,env}){
       if(!actor)return sendJSON(res,401,{error:'Nicht angemeldet'});
       const params=new URL(req.url,'http://localhost').searchParams;
       const tenantId=actor.role==='superadmin'?params.get('tenantId'):actor.tenant_id;
+      if(path==='/api/ocpp/test-command'&&req.method==='POST'){
+        // Disabled in production unless deliberately enabled. Never send an
+        // arbitrary OCPP command to a real/customer charger from this route.
+        if(env.CV_OCPP_TEST_COMMANDS!=='1')return sendJSON(res,404,{error:'Testbefehle deaktiviert'});
+        if(actor.role!=='superadmin')return sendJSON(res,403,{error:'Nur Walectra darf Testbefehle ausführen'});
+        if(!origin||req.headers.origin!==origin||
+           String(req.headers['content-type']||'').split(';')[0]!=='application/json')
+          return sendJSON(res,403,{error:'Ungültige Anfragequelle'});
+        const chunks=[];let size=0;
+        for await(const chunk of req){
+          size+=chunk.length;
+          if(size>16384)return sendJSON(res,413,{error:'Testauftrag zu groß'});
+          chunks.push(chunk);
+        }
+        let body;
+        try{body=JSON.parse(Buffer.concat(chunks).toString('utf8'));}
+        catch{return sendJSON(res,400,{error:'Ungültiges JSON'});}
+        const tid=body?.tenantId,identity=body?.identity,action=body?.action;
+        if(!validUuid(tid)||!validId(identity))
+          return sendJSON(res,400,{error:'Testkunde und OCPP-Identität erforderlich'});
+        const validation=validateOcppCsmsCommand(action,body?.payload);
+        if(!validation.ok)return sendJSON(res,400,{error:validation.error});
+        const station=await pool.query(
+          "SELECT c.identity,c.station_id,c.tenant_id FROM cv_ocpp_credentials c "+
+          "JOIN cv_stations s ON s.id=c.station_id AND s.tenant_id=c.tenant_id "+
+          "JOIN cv_tenants t ON t.id=c.tenant_id AND t.status='active' AND t.deleted_at IS NULL "+
+          "WHERE c.identity=$1 AND c.tenant_id=$2 AND s.is_simulator=true",
+          [identity,tid]);
+        if(!station.rowCount)return sendJSON(res,404,{error:'Isolierte Teststation nicht gefunden'});
+        const result=await bridge.advancedCommand(station.rows[0],action,body.payload);
+        const {code,...data}=result;
+        return sendJSON(res,code,data);
+      }
       if(path==='/api/ocpp/freecharge-configuration'){
         return await handleFreechargeConfiguration({
           pool,actor,req,origin,send:(status,data)=>sendJSON(res,status,data),configure:bridge.configureFreecharge
