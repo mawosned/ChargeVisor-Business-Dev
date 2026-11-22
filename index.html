@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#071b1b" />
+<title>ChargeVisor — Dashboard Demo</title>
+<meta name="description" content="Interaktive ChargeVisor-Demo für Unternehmen und WEGs: Ladepunkte, Ladevorgänge, Nutzer und Einladungen." />
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+<div id="app">
+<aside class="sidebar" id="sidebar">
+ <div class="brand" aria-label="ChargeVisor"><img class="brand-logo" src="/assets/chargevisor-logo.svg" alt="ChargeVisor" /></div>
+ <div class="sidebar-caption">LADEMANAGEMENT</div>
+ <nav id="nav" aria-label="Hauptnavigation"></nav>
+ <div class="sidebar-bottom"><div class="sidebar-help"><span class="help-dot"></span><strong>Demo-Modus</strong><small>Simulierte Daten & Aktionen</small></div><div class="sidebar-foot">ChargeVisor · Frontend-Prototyp</div></div>
+</aside>
+<div class="main-wrap">
+ <header class="topbar"><button class="mobile-menu" id="menuBtn" aria-label="Menü öffnen">☰</button><div class="breadcrumb">ChargeVisor <span>/</span> <strong id="crumb">Übersicht</strong></div><div class="top-right"><span class="preview-pill"><span class="preview-dot"></span> Testumgebung</span><a href="/login" class="btn ghost small" title="Echte Kundenanmeldung – Aktivierung nach Datenbankeinrichtung">Kunden-Login (Pilot)</a><div class="role-wrap"><label for="roleSelect" class="role-label">Demo-Ansicht</label><select id="roleSelect" aria-label="Demo-Rolle auswählen"><option value="super">Walectra · Superadmin</option><option value="admin">Kunde · Admin</option><option value="user">Kunde · Nutzer</option></select></div><span class="avatar" id="avatar">WA</span></div></header>
+ <main id="content" class="content" tabindex="-1"></main>
+</div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="modalHost"></div>
+</div>
+<script src="/exports.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

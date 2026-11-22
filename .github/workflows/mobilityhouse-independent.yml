@@ -1,0 +1,89 @@
+name: Independent Mobility House OCPP 1.6J Integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      duration_seconds:
+        description: Simulation duration in seconds
+        type: choice
+        default: '10'
+        options:
+          - '10'
+          - '900'
+          - '3600'
+  schedule:
+    - cron: '40 6 * * *'
+
+jobs:
+  mobilityhouse-to-chargevisor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: chargevisor_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d chargevisor_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      CV_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/chargevisor_ci
+      CV_PUBLIC_URL: http://127.0.0.1:10000
+      CV_ALLOW_CI_SEED: '1'
+      CV_BOOTSTRAP_EMAIL: ci@chargevisor.test
+      CV_BOOTSTRAP_PASSWORD: local-test-only-password-123456
+      CV_SIM_WSS_BASE: ws://127.0.0.1:10000/ocpp
+      CV_SIM_DURATION_SECONDS: ${{ inputs.duration_seconds || '10' }}
+      CV_SIM_IDLE_SECONDS: '0.2'
+      CV_SIM_CHARGE_SECONDS: '1'
+      CV_SIM_METER_SECONDS: '0.25'
+      CV_SIM_HEARTBEAT_SECONDS: '0.5'
+      CV_SIM_RECONNECT_SECONDS: '0.2'
+      CV_SIM_FAULT_EVERY: '2'
+      PORT: '10000'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install ChargeVisor and original Mobility House OCPP library
+        run: |
+          npm install --ignore-scripts
+          python -m pip install -r requirements-ocpp-simulator.txt
+      - name: Initialize disposable database
+        run: CV_INIT_DB=1 node backend/setup.mjs
+      - name: Generate an RFID key for this disposable run
+        run: echo "CV_RFID_HMAC_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+      - name: Start real OCPP server and wait for its health endpoint
+        run: |
+          node server.mjs >/tmp/ocpp-test-server.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:10000/health >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/ocpp-test-server.log
+          exit 1
+      - name: Provision isolated master and two OCPP connectors
+        run: node scripts/seed-ocpp-ci.mjs
+      - name: Run separate real-WebSocket Mobility House charging fleet
+        run: python scripts/mobilityhouse-fleet.py
+      - name: Independently verify charging, end-of-charge, faults, telemetry and DB records
+        run: node scripts/check-ocpp-ci.mjs
+      - name: Verify physical-station RFID, transaction retries and role-scoped history
+        run: node scripts/physical-ocpp-ci.mjs
+      - name: Collect backend logs on failure
+        if: failure()
+        run: cat /tmp/ocpp-test-server.log || true

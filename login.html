@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="de">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light">
+<title>ChargeVisor – Anmeldung</title>
+<style>
+:root {
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  color: #20252d;
+  background: #fff;
+  --muted: #596473;
+  --line: #d7dce3;
+  --focus: #375b94;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  grid-template-rows: auto 1fr auto;
+  column-gap: clamp(32px, 6vw, 96px);
+  padding: clamp(16px, 2.1vw, 32px);
+  background: #fff;
+}
+header, main, footer {
+  grid-column: 1;
+  width: min(100%, 420px);
+  justify-self: center;
+}
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 60px;
+}
+.logo { display: block; width: clamp(118px, 14vw, 166px); height: auto; }
+header a {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+header a:hover { text-decoration: underline; text-underline-offset: 3px; }
+main { align-self: center; padding: 42px 0; }
+.panel { min-width: 0; }
+h1 {
+  margin: 0 0 14px;
+  color: #181e27;
+  font-size: clamp(30px, 3.1vw, 44px);
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -.04em;
+}
+h2 { font-size: 17px; margin: 0 0 14px; }
+p { margin: 0 0 14px; color: var(--muted); font-size: 14px; line-height: 1.55; }
+form { margin-top: 24px; }
+label { display: block; margin: 17px 0 8px; font-size: 14px; font-weight: 600; }
+input, select {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 11px 13px;
+  background: #fff;
+  color: #20252d;
+  font: inherit;
+  font-size: 16px;
+}
+button {
+  margin-top: 14px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 11px 17px;
+  background: #252b35;
+  color: #fff;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+button:hover { background: #3a4452; }
+button:disabled { opacity: .55; cursor: wait; }
+button.secondary { background: #f2f4f7; color: #333e4e; }
+button.secondary:hover { background: #e8ecf1; }
+main > .panel form > button[type="submit"] { width: 100%; min-height: 48px; margin-top: 24px; }
+#forgot-password, #reset-request-back {
+  display: block;
+  min-height: 38px;
+  margin: 6px auto 0;
+  padding: 6px 12px;
+  background: transparent;
+  color: #324e75;
+  font-size: 14px;
+}
+#forgot-password:hover, #reset-request-back:hover { text-decoration: underline; text-underline-offset: 3px; }
+.password-field { position: relative; }
+.password-field input { padding-right: 92px; }
+button.toggle-password {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  margin: 0;
+  padding: 7px 9px;
+  transform: translateY(-50%);
+  background: transparent;
+  color: #455064;
+  font-size: 13px;
+  font-weight: 600;
+}
+button.toggle-password:hover { background: #f2f4f7; }
+:where(button, input, select, a):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#feedback { margin: 14px 0 0; }
+#feedback:empty { margin: 0; }
+.error { color: #a82331; }
+.ok { color: #226044; }
+.small { font-size: 12px; color: var(--muted); }
+.pill { display: inline-block; padding: 5px 10px; border-radius: 30px; background: #eef1f5; font-size: 12px; font-weight: 700; }
+.result { margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #f6f7f9; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 15px; }
+ul { padding-left: 19px; }
+li { padding: 6px 0; border-bottom: 1px solid #e9edf1; font-size: 13px; }
+[hidden] { display: none !important; }
+footer img { display: block; width: 130px; height: auto; filter: brightness(0); }
+footer { align-self: end; padding: 12px 0 6px; color: var(--muted); font-size: 12px; }
+.login-visual {
+  grid-column: 2;
+  grid-row: 1 / -1;
+  min-height: 580px;
+  border-radius: 18px;
+  background: linear-gradient(125deg, #ffffffb3, #ffffff82), #f1f2f2 url('/assets/login-wallbox.webp') center / cover no-repeat;
+}
+body:has(#dashboard:not([hidden])) { grid-template-columns: minmax(0, 1fr); }
+body:has(#dashboard:not([hidden])) :is(header, main, footer) { width: min(100%, 980px); }
+body:has(#dashboard:not([hidden])) main { align-self: start; }
+body:has(#dashboard:not([hidden])) .login-visual { display: none; }
+#dashboard .panel { margin-bottom: 16px; padding: 24px; border: 1px solid var(--line); border-radius: 12px; }
+@media (max-width: 760px) {
+  body { grid-template-columns: minmax(0, 1fr); padding: 16px clamp(20px, 6vw, 42px); }
+  .login-visual { display: none; }
+}
+@media (max-height: 620px) {
+  main { padding-block: 25px; }
+  .login-visual { min-height: 0; }
+}
+
+/* Real persistent tenant management, separate from the localStorage demo */
+#structure-panel{grid-column:1/-1}
+.structure-head{display:flex;align-items:flex-start;justify-content:space-between;gap:15px;flex-wrap:wrap}
+.structure-head h2{margin:0}
+.structure-forms{display:grid;grid-template-columns:minmax(230px,1fr) minmax(280px,1.7fr);gap:16px;margin-top:20px}
+.structure-form{padding:18px;border:1px solid #dcebe3;border-radius:12px;background:#fafdfe}
+.structure-form h3{margin:0 0 10px;font-size:15px}
+.structure-form input,.structure-form select{width:100%}
+.structure-hint{font-size:12px;line-height:1.5;color:#647e75}
+.structure-section{margin-top:17px;border:1px solid #dceae2;border-radius:12px;overflow:hidden}
+.structure-site-head{padding:14px 16px;background:#eff8f2}
+.structure-site-head strong{font-size:16px}
+.structure-site-head p{margin:4px 0}
+.structure-station{padding:15px 18px;border-top:1px solid #e2eee7}
+.structure-station-title{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.structure-point{padding:13px 0 13px 14px;border-top:1px solid #e8f1eb;display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+.structure-point-main{min-width:220px;flex:1}
+.structure-point-main strong{display:block;font-size:14px}
+.structure-point-actions{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+.structure-point-actions button{margin:0;padding:8px 11px;font-size:12px}
+.structure-point-actions select{width:auto;max-width:220px;font-size:12px;padding:8px}
+.structure-pill{display:inline-block;border-radius:20px;background:#e4f5ed;color:#167859;padding:4px 9px;font-size:11px;font-weight:700}
+.structure-pill.off{background:#f9eded;color:#aa4148}
+#point-specs{margin-top:14px}
+.structure-spec{padding:10px;border:1px solid #e0ece4;border-radius:9px;margin-bottom:8px;background:#fff}
+.structure-spec label{margin-top:3px}
+.structure-spec-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.structure-empty{padding:17px;border:1px dashed #bfdbcd;border-radius:10px;margin-top:16px;color:#607f71;font-size:13px}
+@media(max-width:760px){.structure-forms,.structure-spec-grid{grid-template-columns:1fr}.structure-point{padding-left:5px}}
+.invite-point-options{display:flex;flex-direction:column;gap:10px;margin:11px 0}
+.invite-point-group{background:#f7fbf8;border:1px solid #d5e9dd;border-radius:10px;padding:11px 13px}
+.invite-point-group strong{font-size:13px}
+.invite-point-group label{display:flex;align-items:center;gap:8px;margin:8px 0 5px;font-weight:400;font-size:13px;cursor:pointer}
+.invite-point-group input[type="checkbox"]{width:16px;height:16px;min-height:0;accent-color:#0b8a6e}
+.invite-empty{font-size:13px;color:#97712b;background:#fff8e6;padding:13px;border-radius:8px}
+</style></head>
+<body>
+<header><img class="logo" src="/assets/chargevisor-logo.svg" alt="ChargeVisor"><div><select id="portalLanguage" aria-label="Sprache"><option value="de">Deutsch</option><option value="en">English</option></select> <a href="/app">Zum Dashboard</a></div></header>
+<main>
+<section class="panel" id="state-panel"><h1>ChargeVisor Business</h1><p id="state-text">Authentifizierung wird geprüft …</p></section>
+<section class="panel" id="login-panel" hidden>
+<h1>Anmelden</h1>
+<form id="login-form"><label for="email">E-Mail</label><input id="email" type="email" autocomplete="username" required>
+<label for="password">Passwort</label><div class="password-field"><input id="password" type="password" autocomplete="current-password" required><button type="button" class="toggle-password" data-password-input="password" aria-controls="password" aria-pressed="false">Anzeigen</button></div>
+<button type="submit">Anmelden</button>
+<button type="button" class="secondary" id="forgot-password">Passwort vergessen?</button></form>
+</section>
+<section class="panel" id="reset-request-panel" hidden>
+<h1>Passwort zurücksetzen</h1><p>Gib die E-Mail-Adresse deines ChargeVisor-Kontos ein. Wir schicken dir einen einmaligen Link per E-Mail.</p>
+<form id="reset-request-form"><label for="reset-email">E-Mail-Adresse</label>
+<input id="reset-email" type="email" autocomplete="email" required>
+<button type="submit">Link per E-Mail anfordern</button>
+<button type="button" class="secondary" id="reset-request-back">Zur Anmeldung</button></form>
+</section>
+<section class="panel" id="reset-panel" hidden>
+<h1>Neues Passwort festlegen</h1><p>Der Link ist 30 Minuten gültig und kann nur einmal verwendet werden.</p>
+<form id="reset-form"><label for="reset-password">Neues Passwort (mindestens 12 Zeichen)</label>
+<div class="password-field"><input id="reset-password" type="password" autocomplete="new-password" minlength="12" required><button type="button" class="toggle-password" data-password-input="reset-password" aria-controls="reset-password" aria-pressed="false">Anzeigen</button></div>
+<label for="reset-password-confirm">Neues Passwort wiederholen</label>
+<div class="password-field"><input id="reset-password-confirm" type="password" autocomplete="new-password" minlength="12" required><button type="button" class="toggle-password" data-password-input="reset-password-confirm" aria-controls="reset-password-confirm" aria-pressed="false">Anzeigen</button></div>
+<button type="submit">Passwort ändern</button></form>
+</section>
+<section class="panel" id="invite-panel" hidden>
+<h1>Einladung annehmen</h1><p>Lege dein Passwort fest. Der Einladungslink ist einmalig und 72 Stunden gültig.</p>
+<form id="accept-form"><label for="new-password">Neues Passwort (mindestens 12 Zeichen)</label>
+<div class="password-field"><input id="new-password" type="password" autocomplete="new-password" minlength="12" required><button type="button" class="toggle-password" data-password-input="new-password" aria-controls="new-password" aria-pressed="false">Anzeigen</button></div>
+<button type="submit">Zugang aktivieren</button></form>
+</section>
+<section id="dashboard" hidden>
+<div class="panel"><h1 id="greeting">ChargeVisor</h1><p id="account-details"></p><button class="secondary" id="logout">Abmelden</button></div>
+<div class="grid">
+<section class="panel" id="ms-panel" hidden><h2>Microsoft 365 – E-Mail-Versand</h2>
+<p id="ms-status">Verbindungsstatus wird geprüft …</p>
+<a href="/api/microsoft/connect" id="ms-connect" hidden>Outlook-Geschäftskonto verbinden</a>
+<button type="button" id="ms-disconnect" class="secondary" hidden>Outlook-Verbindung trennen</button>
+<p class="small">Nur Walectra-Superadmin · delegierte Berechtigung Mail.Send · keine Postfach-Leserechte</p>
+</section>
+<section class="panel" id="create-tenant" hidden><h2>Neuen Kunden anlegen</h2>
+<form id="tenant-form"><label for="tenant-name">Firmenname / WEG</label><input id="tenant-name" required maxlength="180"><button type="submit">Kunde erstellen</button></form></section>
+<section class="panel" id="license-panel" hidden><h2>Kunden freischalten</h2>
+<form id="license-form"><label for="license-tenant">Kunde</label><select id="license-tenant"></select>
+<label for="license-status">Status</label><select id="license-status"><option value="pending">Wartet auf Freigabe</option><option value="active">Aktiv</option><option value="suspended">Gesperrt</option></select>
+<label for="license-points">Lizenzierte Ladepunkte</label><input id="license-points" type="number" min="0" max="100000" value="0" required>
+<button type="submit">Lizenz speichern</button></form></section>
+
+<section class="panel" id="structure-panel" hidden>
+<div class="structure-head"><div><h2>Standorte & Ladepunkte</h2>
+<p id="structure-description">Walectra richtet die Hardware ein. Der Kunden-Admin verwaltet Nutzer und deren Ladepunktzugang. Live-Status folgt nach der OCPP-Anbindung.</p>
+</div><span class="structure-pill" id="structure-count">0 / 0 Ladepunkte</span></div>
+<p class="small" id="structure-customer"></p>
+<div class="structure-forms" id="structure-forms">
+  <form id="site-form" class="structure-form">
+    <h3>Standort hinzufügen</h3>
+    <label for="site-name">Standortname</label><input id="site-name" required maxlength="160" placeholder="z. B. Tiefgarage Haus A">
+    <label for="site-address">Adresse / Beschreibung</label><input id="site-address" maxlength="300" placeholder="Straße, Ort oder Bereich">
+    <button type="submit">Standort speichern</button>
+  </form>
+  <form id="station-form" class="structure-form">
+    <h3>Ladestation hinzufügen</h3>
+    <label for="station-site">Standort</label><select id="station-site" required></select>
+    <label for="station-name">Name der Anlage</label><input id="station-name" required maxlength="160" placeholder="z. B. Lumina Master / Reihe A">
+    <label for="station-serial">Seriennummer (optional)</label><input id="station-serial" maxlength="120">
+    <label for="station-topology">OCPP-Anbindung</label><select id="station-topology">
+      <option value="shared">Eine OCPP-ID mit mehreren Connectoren</option>
+      <option value="individual">Jede Wallbox hat eine eigene OCPP-ID</option>
+    </select>
+    <div id="station-ocpp-wrap"><label for="station-ocpp">Gemeinsame OCPP-ID</label><input id="station-ocpp" maxlength="120" placeholder="Exakte Geräte-ID, z. B. WAL-TEST-001"></div>
+    <label for="station-count">Anzahl Ladepunkte</label><input id="station-count" type="number" min="1" max="32" value="1" required>
+    <p class="structure-hint" id="station-hint">Bei OCPP 1.6 besitzt jeder Connector eine eigene Nummer. Die OCPP-ID muss zum realen Gerät passen.</p>
+    <div id="point-specs"></div>
+    <button type="submit">Ladestation mit Ladepunkten speichern</button>
+  </form>
+</div>
+<div id="structure-list" aria-live="polite"></div>
+</section>
+<section class="panel" id="invite-user" hidden><h2>Benutzer einladen</h2>
+<form id="user-form">
+<div id="invite-tenant-wrap" hidden><label for="invite-tenant">Kunde</label><select id="invite-tenant"></select></div>
+<label for="invite-name">Name</label><input id="invite-name" required maxlength="160">
+<label for="invite-email">E-Mail</label><input id="invite-email" type="email" required>
+<div id="invite-role-wrap" hidden><label for="invite-role">Rolle</label><select id="invite-role"><option value="admin">Kunden-Admin</option><option value="user">Nutzer</option></select></div>
+<div id="invite-point-wrap" hidden>
+<label>Ladepunkte für den Nutzer auswählen</label>
+<p class="small">Wähle einen oder mehrere Ladepunkte aus. Die Freigabe erfolgt automatisch, sobald der Nutzer seine Einladung annimmt.</p>
+<div id="invite-point-options" class="invite-point-options"></div>
+</div>
+<button type="submit">Einladung versenden</button></form>
+<p class="small">Einladungen werden über das verbundene Microsoft-365-Geschäftskonto versendet. Falls der Versand nicht möglich ist, erhältst du einen einmaligen Link zur manuellen Weitergabe.</p>
+</section>
+<section class="panel" id="users-panel" hidden><h2>Benutzer im Kundenkonto</h2><p class="small">Aktive Nutzer werden erst angezeigt, wenn sie ihren Einladungslink angenommen und ein Passwort angelegt haben.</p><ul id="users-list"></ul><h2>Ausstehende Einladungen</h2><ul id="invites-list"></ul></section>
+<section class="panel" id="points-panel" hidden><h2>Meine Ladepunkte</h2><ul id="points-list"></ul>
+<p class="small">Die Live-OCPP-Anbindung erfolgt als nächster Schritt. Diese Ansicht enthält keine erfundenen Ladezustände.</p></section>
+</div></section>
+<p id="feedback" aria-live="polite"></p>
+</main>
+<div class="login-visual" aria-hidden="true"></div>
+<footer><img src="/assets/walectra-logo.webp" alt="Walectra"></footer>
+<script type="module" src="/login.js"></script>
+<script src="/portal-language.js"></script>
+</body></html>

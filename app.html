@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#071b1b" />
+<title>ChargeVisor — Business</title>
+<meta name="description" content="ChargeVisor Business – Kunden, Ladepunkte und Nutzer sicher verwalten." />
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body class="cv-business">
+<div id="app">
+<aside class="sidebar" id="sidebar">
+ <div class="brand" aria-label="ChargeVisor"><img class="brand-logo" src="/assets/chargevisor-logo.svg" alt="ChargeVisor" /></div>
+ <div class="sidebar-caption">LADEMANAGEMENT</div>
+ <nav id="nav" aria-label="Hauptnavigation"></nav>
+ <div class="sidebar-bottom"><div class="sidebar-help"><span class="help-dot"></span><strong>ChargeVisor Business</strong><small>Gesicherte Kundenverwaltung</small></div><div class="sidebar-foot"><img class="walectra-footer-logo" src="/assets/walectra-logo.webp" alt="Walectra"></div></div>
+</aside>
+<div class="main-wrap">
+ <header class="topbar"><button class="mobile-menu" id="menuBtn" aria-label="Menü öffnen">☰</button><div class="breadcrumb">ChargeVisor <span>/</span> <strong id="crumb">Übersicht</strong></div><div class="cv-customer-context" id="customerContext" aria-label="Aktueller Kunde"></div><div class="top-right"><span class="preview-pill"><span class="preview-dot"></span> OCPP 1.6J</span><select id="portalLanguage" aria-label="Sprache"><option value="de">Deutsch</option><option value="en">English</option></select><span id="realRole" class="role-label" aria-label="Aktuelle Rolle">Wird geladen</span><button id="rolePreviewBtn" type="button" class="btn ghost small" aria-haspopup="dialog" hidden>Rollenansicht</button><span class="avatar" id="avatar">WA</span><button id="logoutReal" type="button" class="btn ghost small">Abmelden</button></div></header>
+ <div id="rolePreviewBanner" class="cv-role-preview" hidden><div><strong id="rolePreviewLabel"></strong><div>Schreibgeschützte Vorschau</div></div><button id="endRolePreview" type="button" class="btn ghost small">Zurück zum Superadmin</button></div>
+ <main id="content" class="content" tabindex="-1"></main>
+</div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="modalHost"></div>
+</div>
+<script src="/exports.js"></script>
+<script src="/app-live.js"></script>
+<script src="/portal-language.js"></script>
+</body>
+</html>

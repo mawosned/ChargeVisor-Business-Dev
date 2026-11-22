@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChargeVisor | OCPP-Test-Wallbox</title>
+  <style>
+    :root{color-scheme:dark;font-family:system-ui,sans-serif;background:#102523;color:#f1fbf9}
+    *{box-sizing:border-box}
+    body{margin:0}
+    main{max-width:60rem;margin:auto;padding:clamp(1rem,4vw,3rem)}
+    h1{font-size:clamp(1.8rem,4vw,2.6rem);margin:0}
+    h2{font-size:1.1rem;margin:0 0 1rem}
+    p{color:#b8d2ce;line-height:1.5}
+    .panels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
+    section{background:#1a3532;border:1px solid #355752;border-radius:.75rem;padding:1.15rem}
+    label{display:grid;gap:.4rem;font-size:.9rem;margin-bottom:.8rem}
+    input,select,button{font:inherit;border-radius:.45rem;border:1px solid #63837f}
+    input,select{width:100%;background:#142b29;padding:.55rem;color:inherit}
+    button{color:#072523;background:#7de5ca;padding:.5rem .7rem;font-weight:650;cursor:pointer}
+    button.secondary{background:#283f3d;color:#edfdf9}
+    button:disabled{cursor:default;opacity:.48}
+    .actions{display:flex;gap:.5rem;flex-wrap:wrap}
+    .status{font-weight:700}
+    .status[data-ok=true]{color:#7de5ca}
+    #connector-state{padding-left:1.3rem;line-height:1.6}
+    #feedback{min-height:1.5rem}
+    #feedback[data-error=true]{color:#ffad9a}
+    @media(max-width:43rem){.panels{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<main>
+  <h1>OCPP-Test-Wallbox</h1>
+  <p>Virtuelle Test-Wallbox in ChargeVisor anlegen und deren OCPP-Zugangsdaten hier eintragen.</p>
+  <div class="panels">
+    <section>
+      <h2>Verbindung</h2>
+      <p class="status" id="connection-state">Getrennt</p>
+      <p id="heartbeat-state" hidden></p>
+      <form id="connection-form" autocomplete="off">
+        <label>OCPP-Adresse<input id="url" type="url" placeholder="wss://…/ocpp/…" required></label>
+        <label>OCPP-ID<input id="identity" required></label>
+        <label>OCPP-Passwort<input id="password" type="password" autocomplete="off" required></label>
+        <label>Connectoren pro OCPP-ID<input id="connector-count" type="number" min="1" max="16" value="1" required></label>
+        <div class="actions">
+          <button type="submit" id="connect">Verbinden</button>
+          <button type="button" id="disconnect" class="secondary" data-action="disconnect">Trennen</button>
+          <button type="button" class="secondary" data-action="heartbeat">Heartbeat senden</button>
+        </div>
+      </form>
+    </section>
+    <section>
+      <h2>Wallbox steuern</h2>
+      <label>Connector<select id="connector"></select></label>
+      <label>Testkarten-ID<input id="tag" value="CV-SIM-TEST" maxlength="20" autocomplete="off"
+        placeholder="SIM-TEST01"></label>
+      <label>Zählerstand (Wh)<input id="wh" type="number" min="0" step="1" value="1100"></label>
+      <div class="actions">
+        <button data-action="authorize" class="secondary">Karte vorhalten</button>
+        <button data-action="start">Laden starten</button>
+        <button data-action="meter" class="secondary">Messwert melden</button>
+        <button data-action="stop" class="secondary">Laden stoppen</button>
+        <button data-action="fault" class="secondary">Störung melden</button>
+        <button data-action="recover" class="secondary">Störung beheben</button>
+      </div>
+      <ul id="connector-state"></ul>
+    </section>
+  </div>
+  <p id="feedback" role="status" aria-live="polite"></p>
+</main>
+<script>
+  const byId = id => document.getElementById(id);
+  const input = id => byId(id).value.trim();
+  const buttons = Array.from(document.querySelectorAll("[data-action]"));
+  const labels = {
+    connect: "OCPP-Anmeldung bestätigt",
+    disconnect: "Verbindung getrennt",
+    heartbeat: "Heartbeat beantwortet",
+    authorize: "OCPP-Antwort auf die Testkarte",
+    start: "OCPP-Antwort auf den Ladestart",
+    meter: "Messwert bestätigt",
+    stop: "Ladevorgang beendet",
+    fault: "Störung gemeldet",
+    recover: "Connector wieder bereit",
+  };
+  const statusLabels = {
+    Available: "Bereit", Charging: "Lädt", Faulted: "Störung",
+    Preparing: "Bereitet vor", Finishing: "Beendet Ladevorgang",
+  };
+  let current = {connected: false, connectors: []};
+  let busy = false;
+
+  function render(state) {
+    current = state;
+    const selected = Number(byId("connector").value);
+    const selector = byId("connector");
+    if (selector.options.length !== state.connectors.length) {
+      selector.replaceChildren(...state.connectors.map(point => new Option("Connector " + point.id, point.id)));
+      if (state.connectors.some(point => point.id === selected)) selector.value = selected;
+    }
+    const point = state.connectors.find(point => point.id === Number(byId("connector").value));
+    byId("connection-state").textContent = state.connected ? "Verbunden · " + state.identity : "Getrennt";
+    byId("connection-state").dataset.ok = state.connected;
+    const heartbeat = byId("heartbeat-state");
+    heartbeat.hidden = !state.connected || !state.lastHeartbeat;
+    if (!heartbeat.hidden) {
+      heartbeat.textContent = "Letzter Heartbeat: " + new Date(state.lastHeartbeat).toLocaleTimeString();
+    }
+    byId("connect").disabled = busy || state.connected;
+    ["url", "identity", "password", "connector-count"].forEach(id => {
+      byId(id).disabled = busy || state.connected;
+    });
+    buttons.forEach(button => {
+      const action = button.dataset.action;
+      const unavailable = {
+        start: !point || point.status !== "Available" || point.transactionId !== null,
+        meter: !point || point.transactionId === null,
+        stop: !point || point.transactionId === null,
+        fault: !point || point.status === "Faulted",
+        recover: !point || point.status !== "Faulted",
+      };
+      button.disabled = busy || !state.connected || Boolean(unavailable[action]);
+    });
+    byId("connector-state").replaceChildren(...state.connectors.map(point => {
+      const row = document.createElement("li");
+      const status = state.connected ? (statusLabels[point.status] || point.status) : "Getrennt";
+      row.textContent = "Connector " + point.id + " · " + status + " · " + point.wh + " Wh";
+      return row;
+    }));
+  }
+
+  function feedback(text, error = false) {
+    byId("feedback").textContent = text;
+    byId("feedback").dataset.error = error;
+  }
+
+  async function command(action, payload = {}) {
+    busy = true;
+    render(current);
+    try {
+      const response = await fetch("/api/command", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({action, ...payload}),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      current = data.state;
+      if (action === "meter") byId("wh").value = Math.min(payload.wh + 100, 2147483647);
+      const reply = data.result?.status;
+      const denied = reply && reply !== "Accepted";
+      feedback(labels[action] + (reply ? " · " + reply : ""), Boolean(denied));
+    } catch (error) {
+      feedback(error.message || "Aktion fehlgeschlagen", true);
+    } finally {
+      busy = false;
+      render(current);
+    }
+  }
+
+  byId("connection-form").addEventListener("submit", event => {
+    event.preventDefault();
+    const password = byId("password").value;
+    byId("password").value = "";
+    command("connect", {
+      url: input("url"), identity: input("identity"), password,
+      connectors: Number(input("connector-count")),
+    });
+  });
+  byId("connector").addEventListener("change", () => {
+    const point = current.connectors.find(point => point.id === Number(byId("connector").value));
+    if (point) byId("wh").value = point.wh + 100;
+    render(current);
+  });
+  buttons.forEach(button => button.addEventListener("click", () => {
+    if (busy) return;
+    const action = button.dataset.action;
+    const payload = {connector: Number(input("connector")), tag: input("tag"), wh: Number(input("wh"))};
+    command(action, payload);
+  }));
+
+  render(current);
+  async function refresh() {
+    if (busy) return;
+    try {
+      const result = await fetch("/api/state").then(response => response.json());
+      if (!busy && result.state) render(result.state);
+    } catch {
+      feedback("Lokales Bedienpanel ist nicht erreichbar.", true);
+    }
+  }
+  refresh();
+  setInterval(refresh, 1500);
+</script>
+</body>
+</html>

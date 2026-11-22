@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 44" role="img" aria-label="Blitz">
+<defs><linearGradient id="blitz" x1="0.1" x2="0.85" y1="0" y2="1"><stop offset="0%" stop-color="#ffd063"/><stop offset="42%" stop-color="#ff9149"/><stop offset="100%" stop-color="#fc6471"/></linearGradient></defs>
+<path fill="url(#blitz)" d="M23.8 1.7 5.5 25.5h11.4v16.7l14-24.9H20.5l3.3-15.6Z"/>
+</svg>

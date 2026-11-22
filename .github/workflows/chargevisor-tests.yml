@@ -1,0 +1,116 @@
+name: ChargeVisor checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '15 6 * * *'
+
+jobs:
+  core-and-simulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --ignore-scripts
+      - name: Test roles, tenancy, authentication, and real OCPP virtual WebSocket
+        run: npm test
+
+  independent-python-ocpp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: chargevisor_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d chargevisor_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      CV_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/chargevisor_ci
+      CV_PUBLIC_URL: http://127.0.0.1:10000
+      CV_ALLOW_CI_SEED: '1'
+      CV_CI_ID: cvci000001
+      CV_CI_PASSWORD: K7M4R8T2V9H3P6WA
+      PORT: '10000'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Node dependencies
+        run: npm install --ignore-scripts
+      - name: Bootstrap disposable database
+        run: |
+          CV_INIT_DB=1 CV_BOOTSTRAP_EMAIL=ci@chargevisor.test \
+            CV_BOOTSTRAP_PASSWORD='CI-Dedicated-Only-Password-2026!' node backend/setup.mjs
+      - name: Start real ChargeVisor backend against disposable PostgreSQL
+        run: |
+          node server.mjs >/tmp/chargevisor-ci.log 2>&1 &
+          for i in $(seq 1 35); do
+            if curl -fsS http://127.0.0.1:10000/health >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/chargevisor-ci.log
+          exit 1
+      - name: Seed a test-only wallbox with real OCPP credentials
+        run: node scripts/seed-ocpp-ci.mjs
+      - name: Install independent OCPP protocol implementation
+        run: python -m pip install -r requirements-ocpp-simulator.txt
+      - name: Run independent OCPP 1.6J simulator (2 charging sessions)
+        run: python scripts/external-ocpp-ci.py
+      - name: Verify actual PostgreSQL events, transactions and simulated flags
+        run: node scripts/check-ocpp-ci.mjs
+      - name: Output server logs on failure
+        if: failure()
+        run: cat /tmp/chargevisor-ci.log || true
+
+  browser-ui-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install application
+        run: npm install --ignore-scripts
+      - name: Install isolated Chromium browser test runner
+        run: npm install --no-save --ignore-scripts '@playwright/test@^1.56.0'
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Serve ChargeVisor without access to any customer database
+        run: |
+          node server.mjs >/tmp/chargevisor-ui.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:10000/health >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/chargevisor-ui.log
+          exit 1
+      - name: Verify customer switcher, Lumina pictures, LED animation and user role isolation in browser
+        run: npx playwright test scripts/ui-regression.spec.mjs --project=chromium --workers=1
+      - name: Attach dashboard screenshot from UI tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chargevisor-ui-regression
+          path: ui-regression-lumina.png
+          if-no-files-found: ignore
