@@ -65,6 +65,16 @@ jobs:
           python -m pip install -r requirements-ocpp-simulator.txt
       - name: Initialize disposable database
         run: CV_INIT_DB=1 node backend/setup.mjs
+      - name: Generate permanent-format but ephemeral CI verifier credential and tenant
+        run: |
+          TENANT="$(node -p 'require("node:crypto").randomUUID()')"
+          TOKEN="$(node -p 'require("node:crypto").randomBytes(48).toString("base64url")')"
+          HASH="$(node -e 'process.stdout.write(require("node:crypto").createHash("sha256").update(process.argv[1]).digest("hex"))' "$TOKEN")"
+          echo "::add-mask::$TOKEN"
+          echo "CV_OCPP_VERIFIER_TENANT_ID=$TENANT" >> "$GITHUB_ENV"
+          echo "CV_OCPP_VERIFIER_SHA256=$HASH" >> "$GITHUB_ENV"
+          echo "CV_VERIFIER_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          echo "CV_VERIFIER_URL=http://127.0.0.1:10000" >> "$GITHUB_ENV"
       - name: Generate an RFID key for this disposable run
         run: echo "CV_RFID_HMAC_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
       - name: Start real OCPP server and wait for its health endpoint
@@ -82,6 +92,8 @@ jobs:
         run: python scripts/mobilityhouse-fleet.py
       - name: Independently verify charging, end-of-charge, faults, telemetry and DB records
         run: node scripts/check-ocpp-ci.mjs
+      - name: Verify OCPP state via independent permanent-token read-only HTTP API
+        run: python tools/ocpp-chain-simulator/backend_verifier.py --identity "cvci000001" --connector 1 --status Available
       - name: Verify physical-station RFID, transaction retries and role-scoped history
         run: node scripts/physical-ocpp-ci.mjs
       - name: Collect backend logs on failure
