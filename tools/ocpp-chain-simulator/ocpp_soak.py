@@ -20,6 +20,7 @@ from ocpp.v16 import call
 
 from ocpp_coverage import AuditStore, CATALOG, code_assessment
 from paced_plan import build_plan, MIN_REAL_STEP_SECONDS
+from backend_verifier import BackendVerifier, BackendEvidenceError
 
 
 def iso():
@@ -84,6 +85,7 @@ class SoakRunner:
         self.report_paths = {}
         self.finished = False
         self.initial_profiles = set(master.limits.profiles)
+        self.verifier = BackendVerifier.from_environment(identity)
 
     def push(self, level, check, detail, connector=None):
         # Avoid persisting passwords or RFID UIDs.
@@ -97,7 +99,7 @@ class SoakRunner:
             self.notify("soak_log", f"{check}: {detail}")
         return event
 
-    def record(self, case_id, verdict, observed, connector=None):
+    def record(self, case_id, verdict, observed, connector=None, evidence=''):
         if case_id in CATALOG:
             existing = self.audit.status(case_id)
             # Failures are sticky: a later successful cycle must never hide a
@@ -111,7 +113,9 @@ class SoakRunner:
             if existing == "PROTOCOL_OK" and verdict == "NOT_TESTED":
                 self.push("INFO", case_id, observed, connector)
                 return
-            self.audit.mark(case_id, verdict, observed, connector)
+            self.audit.mark(case_id, verdict, observed, connector,
+                            evidence=evidence,
+                            reviewer='Automatic backend verifier' if evidence else '')
         self.push(verdict, case_id, observed, connector)
 
     async def call(self, payload, label, limit=18):
@@ -616,6 +620,78 @@ class SoakRunner:
 
         self.push("INFO", kind, "Unknown scheduled test; intentionally not marked PASS")
 
+    async def verify_backend_step(self, step, prior_tx=None):
+        """Only promote an acknowledged scenario when backend evidence agrees.
+
+        This does NOT prove the user interface or CSMS-originated charging
+        profile behavior. Fail the tested case if verification was configured
+        but failed; do not invent success from an OCPP ACK.
+        """
+        if self.verifier is None:
+            return
+        kind, connector, value = step["kind"], step.get("connector"), step.get("value")
+        if not connector:
+            return
+        cases, expected = [], {}
+        if kind == "START":
+            tx = self.owned_txs.get(connector)
+            if tx is None:
+                return
+            cases = ["CP.StartTransaction", "STATUS.Charging"]
+            expected = {"status": "Charging", "session_active": True,
+                        "transaction_id": tx}
+        elif kind == "STOP":
+            if prior_tx is None:
+                return
+            cases = ["CP.StopTransaction", "STATUS.Available"]
+            expected = {"status": "Available", "session_active": False,
+                        "transaction_id": prior_tx}
+        elif kind in ("SUSPEND_EV", "SUSPEND_EVSE"):
+            status = "SuspendedEV" if kind == "SUSPEND_EV" else "SuspendedEVSE"
+            cases = ["SCENARIO.Load." + status, "STATUS." + status]
+            expected = {"status": status}
+        elif kind in ("STATUS", "ERROR", "RESTORE"):
+            status = ("Faulted" if kind == "ERROR" else
+                      "Available" if kind == "RESTORE" else value)
+            code = value if kind == "ERROR" else (
+                "OtherError" if status == "Faulted" else "NoError")
+            cases = ["ERROR." + value] if kind == "ERROR" else ["STATUS." + status]
+            if status == "Faulted":
+                cases.append("STATUS.Faulted")
+            expected = {"status": status, "error_code": code}
+        elif kind == "METER":
+            if connector not in self.owned_txs:
+                return
+            active = self.master.active_transactions()
+            power = self.master.limits.effective(connector, active)
+            cases = ["CP.MeterValues"]
+            expected = {"power_w": round(power), "power_tolerance": 1}
+        else:
+            return
+        # Only upgrade cases that actually received a successful protocol
+        # result in this run. Never erase a sticky FAIL.
+        cases = [case for case in cases
+                 if case in CATALOG and self.audit.status(case) == "PROTOCOL_OK"]
+        if not cases:
+            return
+        try:
+            snapshot = await self.verifier.wait_for(connector, timeout_seconds=15,
+                                                   **expected)
+            evidence = ("Read-only /api/ocpp/test-verification: identity SHA256=" +
+                        safe_identity(self.identity) + ", connector=" +
+                        str(connector) + ", observed_at=" +
+                        str(snapshot.get("observed_at", "")) +
+                        ", expected=" + json.dumps(expected, sort_keys=True))
+            for case in cases:
+                self.record(case, "PASS",
+                            "OCPP ACK and actual isolated backend state match; UI NOT proven",
+                            connector, evidence=evidence)
+        except (BackendEvidenceError, ValueError, TypeError) as exc:
+            for case in cases:
+                self.record(case, "FAIL",
+                            "OCPP ACK but backend verification failed: " +
+                            type(exc).__name__ + ": " + str(exc)[:140], connector)
+
     async def run(self):
         """A paced, single-scenario-at-a-time endurance run.
 
@@ -641,8 +717,11 @@ class SoakRunner:
                 self.cycle = self.completed_steps + 1
                 await self.tick(f"Test {self.cycle}: {step['kind']} "
                                 f"Connector {step.get('connector') or '-'}")
+                prior_tx = (self.master.points.get(step.get("connector"), {}).get("tx")
+                            if step.get("connector") else None)
                 try:
                     await self.execute_paced_step(step)
+                    await self.verify_backend_step(step, prior_tx)
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
@@ -722,7 +801,7 @@ class SoakRunner:
             "summary": self.audit.summary(),
             "meaning": {
                 "PROTOCOL_OK": "OCPP answered, backend storage/UI NOT proven",
-                "PASS": "Requires independent backend/UI evidence (none auto assigned)",
+                "PASS": "OCPP ACK + independently verified backend evidence; UI still NOT proven",
                 "FAIL": "OCPP/protocol/scenario failed",
                 "NOT_TESTED": "Not run or cannot be triggered using charger-side access",
                 "NOT_IMPLEMENTED": "Explicitly not supported after actual test",
@@ -732,6 +811,7 @@ class SoakRunner:
                 "csms_dynamic_load_management_proven": False,
                 "note": "30 kW local budget is a simulator algorithm; no automatic backend DLM proof",
             },
+            "backend_verifier_enabled": self.verifier is not None,
             "matrix_json": str(matrix_json),
             "matrix_csv": str(matrix_csv),
             "events": self.events,

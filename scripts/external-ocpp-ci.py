@@ -80,7 +80,7 @@ async def main():
                         "timestamp": timestamp(),
                         "sampledValue": [
                             {"value": str(meter_start + 50), "measurand": "Energy.Active.Import.Register", "unit": "Wh"},
-                            {"value": "7200", "measurand": "Power.Active.Import", "unit": "W"},
+                            {"value": "11040", "measurand": "Power.Active.Import", "unit": "W"},
                         ],
                     }],
                 ))

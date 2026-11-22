@@ -5,7 +5,7 @@ import {hashPassword} from '../backend/auth.mjs';
 if(process.env.CV_ALLOW_CI_SEED!=='1'||!process.env.CV_DATABASE_URL?.includes('chargevisor_ci'))
   throw Error('Refusing to seed anything except dedicated ephemeral chargevisor_ci database');
 const pool=new Pool({connectionString:process.env.CV_DATABASE_URL});
-const tenant=randomUUID(),site=randomUUID(),station=randomUUID(),point=randomUUID();
+const tenant=process.env.CV_OCPP_VERIFIER_TENANT_ID||randomUUID(),site=randomUUID(),station=randomUUID(),point=randomUUID();
 const identity=process.env.CV_CI_ID||'cvci000001';
 const password=process.env.CV_CI_PASSWORD||'K7M4R8T2V9H3P6WA';
 const client=await pool.connect();
