@@ -63,24 +63,54 @@ try {
 
     $backup = Join-Path $dir ('backup-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
     New-Item -ItemType Directory -Path $backup -Force | Out-Null
-    foreach ($name in $files) {
-        $dest = Join-Path $dir $name
-        if (Test-Path $dest) { Copy-Item -LiteralPath $dest -Destination $backup -Force }
-        Copy-Item -LiteralPath (Join-Path $stage $name) -Destination $dest -Force
-    }
-    # Verify that every critical file actually reached the live simulator folder.
-    foreach ($name in @('paced_plan.py', 'backend_verifier.py', 'ocpp_soak.py', 'desktop_simulator.py', 'smart_charging.py')) {
-        if (-not (Test-Path (Join-Path $dir $name))) {
-            throw "Installation unvollstaendig: $name wurde nicht kopiert. Starte Python nicht."
+    $changed = @()
+    $previouslyPresent = @{}
+    function Restore-PreviousVersion {
+        foreach ($name in $changed) {
+            $dest = Join-Path $dir $name
+            if ($previouslyPresent[$name]) {
+                Copy-Item -LiteralPath (Join-Path $backup $name) -Destination $dest -Force
+            } elseif (Test-Path -LiteralPath $dest) {
+                Remove-Item -LiteralPath $dest -Force
+            }
         }
     }
-    Write-Host "Update abgeschlossen. Sicherung: $backup"
-    Push-Location $dir
     try {
-        Write-Host 'Vortests bestanden. Starte die neue Testkonsole ...'
-        & $python desktop_simulator.py
-        if ($LASTEXITCODE -ne 0) { throw 'Simulator mit Python-Fehler beendet' }
-    } finally { Pop-Location }
+        foreach ($name in $files) {
+            $dest = Join-Path $dir $name
+            $previouslyPresent[$name] = Test-Path -LiteralPath $dest
+            if ($previouslyPresent[$name]) {
+                Copy-Item -LiteralPath $dest -Destination $backup -Force
+            }
+            # Record the file BEFORE copying: a partial write must also roll back.
+            $changed += $name
+            Copy-Item -LiteralPath (Join-Path $stage $name) -Destination $dest -Force
+        }
+        # Verify that every critical file actually reached the live simulator folder.
+        foreach ($name in @('paced_plan.py', 'backend_verifier.py', 'ocpp_soak.py', 'desktop_simulator.py', 'smart_charging.py')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $dir $name))) {
+                throw "Installation unvollstaendig: $name wurde nicht kopiert."
+            }
+        }
+        Write-Host "Update abgeschlossen. Sicherung: $backup"
+        Push-Location $dir
+        try {
+            Write-Host 'Vortests bestanden. Starte die neue Testkonsole ...'
+            & $python desktop_simulator.py
+            if ($LASTEXITCODE -ne 0) {
+                throw 'Simulator mit Python-Fehler beendet; alte Version wird wiederhergestellt.'
+            }
+        } finally { Pop-Location }
+    } catch {
+        $originalError = $_
+        try {
+            Restore-PreviousVersion
+            Write-Warning 'Update oder Simulatorstart fehlgeschlagen. Vorherige Simulator-Dateien wiederhergestellt.'
+        } catch {
+            throw "Automatisches Rollback fehlgeschlagen. Sicherung: $backup. Ursache: $originalError. Rollbackfehler: $_"
+        }
+        throw $originalError
+    }
 } finally {
     if (Test-Path $stage) {
         Remove-Item -LiteralPath $stage -Force -Recurse -ErrorAction SilentlyContinue
