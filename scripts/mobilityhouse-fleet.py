@@ -131,12 +131,12 @@ class VirtualWallbox:
         periods=max(1,round(self.charge/self.meter))
         for i in range(periods):
             await self.pause(self.charge/periods)
-            self.energy[connector]+=max(1,round(7200*self.charge/periods/3600))
+            self.energy[connector]+=max(1,round(11040*self.charge/periods/3600))
             await self.request(cp,call.MeterValues(
                 connector_id=connector,transaction_id=tx.transaction_id,
                 meter_value=[{"timestamp":timestamp(),"sampledValue":[
                     {"value":str(self.energy[connector]),"measurand":"Energy.Active.Import.Register","unit":"Wh"},
-                    {"value":"7200","measurand":"Power.Active.Import","unit":"W"}]}]
+                    {"value":"11040","measurand":"Power.Active.Import","unit":"W"}]}]
             ),"MeterValues")
         await self.stop_transaction(cp,"Local")
         await self.status(cp,connector,"Finishing")
