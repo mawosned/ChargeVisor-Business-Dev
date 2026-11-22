@@ -5,7 +5,7 @@ import {allowsTestRfid,captureTestRfid,ensureTestRfidSchema,handleTestRfid,valid
 import {createPhysicalOcpp,ensurePhysicalOcppSchema} from './physical-ocpp.mjs';
 import {chargingReport} from './charging-report.mjs';
 import {applyLuminaFreecharge,handleFreechargeConfiguration} from './freecharge.mjs';
-import {validateOcppCsmsCommand} from './ocpp-command-catalog.mjs';
+import {validateOcppCsmsCommand,validateOcppCsmsResponse} from './ocpp-command-catalog.mjs';
 import {createOcppTestVerifier} from './ocpp-test-verifier.mjs';
 
 const now=()=>new Date().toISOString();
@@ -285,6 +285,8 @@ export function createOcppBridge(pool,env=process.env){
     try{
       const outcome=await sendCommand(ctx,action,payload,{raw:true});
       if(!outcome.ok)return {code:409,error:outcome.error,errorCode:outcome.errorCode||null};
+      const responseCheck=validateOcppCsmsResponse(action,outcome.response);
+      if(!responseCheck.ok)return {code:502,error:responseCheck.error};
       // Only audit the action and result. Do not log tokens, RFID IDs or URLs.
       await event(ctx,'CSMS.'+action,{responseStatus:outcome.response.status||null});
       return {code:200,action,response:outcome.response};
