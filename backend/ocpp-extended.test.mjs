@@ -5,7 +5,7 @@ import {createServer} from 'node:http';
 import {WebSocket} from 'ws';
 import {hashPassword} from './auth.mjs';
 import {createOcppBridge,createOcppApi} from './ocpp.mjs';
-import {OCPP_CSMS_ACTIONS,validateOcppCsmsCommand} from './ocpp-command-catalog.mjs';
+import {OCPP_CSMS_ACTIONS,validateOcppCsmsCommand,validateOcppCsmsResponse} from './ocpp-command-catalog.mjs';
 
 const TENANT='11111111-1111-4111-8111-111111111111';
 const STATION='22222222-2222-4222-8222-222222222222';
@@ -70,6 +70,27 @@ function makeRes(){
     end(body){this.payload=body?JSON.parse(body):null;}
   };
 }
+
+test('Valid CALLRESULT is action-specific; malformed replies cannot earn PASS',()=>{
+  for(const action of OCPP_CSMS_ACTIONS){
+    let response={status:'Accepted'};
+    if(action==='GetConfiguration')response={configurationKey:[],unknownKey:[]};
+    if(action==='GetDiagnostics')response={fileName:'diagnostic-test.log'};
+    if(action==='GetLocalListVersion')response={listVersion:1};
+    if(action==='UnlockConnector')response={status:'Unlocked'};
+    if(action==='UpdateFirmware')response={};
+    assert.equal(validateOcppCsmsResponse(action,response).ok,true,action);
+  }
+  for(const action of OCPP_CSMS_ACTIONS){
+    assert.equal(validateOcppCsmsResponse(action,null).ok,false,action);
+  }
+  assert.equal(validateOcppCsmsResponse('Reset',{}).ok,false);
+  assert.equal(validateOcppCsmsResponse('UnlockConnector',{status:'Accepted'}).ok,false);
+  assert.equal(validateOcppCsmsResponse('GetLocalListVersion',{status:'Accepted'}).ok,false);
+  assert.equal(validateOcppCsmsResponse('UpdateFirmware',{status:'Accepted'}).ok,false);
+  assert.equal(validateOcppCsmsResponse('GetConfiguration',{configurationKey:[{key:'x'}]}).ok,false);
+  assert.equal(validateOcppCsmsResponse('GetDiagnostics',{fileName:'log.txt'}).ok,true);
+});
 
 test('Existing WebSocket: firmware, diagnostics and proprietary data messages are safely handled',async()=>{
   const password='test-only-credential-value-2026';
@@ -153,6 +174,8 @@ test('Opt-in CSMS command API sends all 19 actions on an authenticated TEST stat
     if(frame[2]==='GetConfiguration')response={configurationKey:[],unknownKey:[]};
     if(frame[2]==='GetLocalListVersion')response={listVersion:3};
     if(frame[2]==='GetDiagnostics')response={fileName:'test-logs.txt'};
+    if(frame[2]==='UnlockConnector')response={status:'Unlocked'};
+    if(frame[2]==='UpdateFirmware')response={};
     socket.send(JSON.stringify([3,frame[1],response]));
   });
   try{
