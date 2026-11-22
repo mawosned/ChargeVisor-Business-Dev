@@ -5,6 +5,7 @@ import {allowsTestRfid,captureTestRfid,ensureTestRfidSchema,handleTestRfid,valid
 import {createPhysicalOcpp,ensurePhysicalOcppSchema} from './physical-ocpp.mjs';
 import {chargingReport} from './charging-report.mjs';
 import {applyLuminaFreecharge,handleFreechargeConfiguration} from './freecharge.mjs';
+import {createOcppTestVerifier} from './ocpp-test-verifier.mjs';
 
 const now=()=>new Date().toISOString();
 const validId=id=>typeof id==='string'&&/^[-\w.:]{2,120}$/.test(id);
@@ -409,7 +410,9 @@ export function createOcppBridge(pool,env=process.env){
 }
 export function createOcppApi({pool,getActor,bridge,port,env}){
   const origin=String(env.CV_PUBLIC_URL||'').replace(/\/$/,'');
+  const testVerifier=createOcppTestVerifier({pool,env});
   return async(req,res,path)=>{
+    if(path==='/api/ocpp/test-verification')return testVerifier(req,res);
     try{
       const actor=await getActor(req);
       if(!actor)return sendJSON(res,401,{error:'Nicht angemeldet'});
