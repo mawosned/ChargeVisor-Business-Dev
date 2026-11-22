@@ -103,3 +103,49 @@ export function validateOcppCsmsCommand(action,payload){
   }
   return valid?{ok:true}:{ok:false,error:'Invalid OCPP 1.6J payload for '+action};
 }
+
+/**
+ * Validate required OCPP 1.6J CALLRESULT semantics. A successful WebSocket
+ * reply is not necessarily a valid response to the requested action.
+ * The rules here intentionally don't claim complete JSON schema conformance:
+ * vendor-specific extra keys are tolerated, while missing/invalid required
+ * status and listVersion fields fail closed.
+ */
+export function validateOcppCsmsResponse(action,response){
+  if(!OCPP_CSMS_ACTIONS.includes(action)||!record(response))
+    return {ok:false,error:'Missing/unknown OCPP 1.6J CALLRESULT'};
+  const statuses={
+    CancelReservation:['Accepted','Rejected'],
+    ChangeAvailability:['Accepted','Rejected','Scheduled'],
+    ChangeConfiguration:['Accepted','Rejected','RebootRequired','NotSupported'],
+    ClearCache:['Accepted','Rejected'],
+    ClearChargingProfile:['Accepted','Unknown'],
+    DataTransfer:['Accepted','Rejected','UnknownMessageId','UnknownVendorId'],
+    GetCompositeSchedule:['Accepted','Rejected'],
+    RemoteStartTransaction:['Accepted','Rejected'],
+    RemoteStopTransaction:['Accepted','Rejected'],
+    ReserveNow:['Accepted','Faulted','Occupied','Rejected','Unavailable'],
+    Reset:['Accepted','Rejected'],
+    SendLocalList:['Accepted','Failed','NotSupported','VersionMismatch'],
+    SetChargingProfile:['Accepted','Rejected','NotSupported'],
+    TriggerMessage:['Accepted','Rejected','NotImplemented'],
+    UnlockConnector:['Unlocked','UnlockFailed','NotSupported']
+  };
+  let valid=false;
+  if(action in statuses){
+    valid=one(response.status,statuses[action]);
+  }else if(action==='GetLocalListVersion'){
+    valid=Number.isInteger(response.listVersion)&&response.listVersion>=-1;
+  }else if(action==='GetConfiguration'){
+    const config=response.configurationKey;
+    valid=optional(config,arr=>Array.isArray(arr)&&arr.length<=1024&&arr.every(x=>
+      record(x)&&text(x.key,50)&&typeof x.value==='string'&&
+      typeof x.readonly==='boolean'))&&
+      optional(response.unknownKey,ids);
+  }else if(action==='GetDiagnostics'){
+    valid=optional(response.fileName,x=>text(x,2048));
+  }else if(action==='UpdateFirmware'){
+    valid=Object.keys(response).length===0;
+  }
+  return valid?{ok:true}:{ok:false,error:'Invalid OCPP CALLRESULT for '+action};
+}
