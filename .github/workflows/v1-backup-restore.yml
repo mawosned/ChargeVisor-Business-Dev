@@ -1,0 +1,59 @@
+name: ChargeVisor disaster recovery - encrypted backup and actual restore
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup-and-restore:
+    name: Backup, authenticate, restore, compare - PostgreSQL 16
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: chargevisor_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d chargevisor_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      CV_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/chargevisor_ci
+      CV_ALLOW_CI_SEED: '1'
+      CV_BOOTSTRAP_EMAIL: ci@chargevisor.test
+      CV_BOOTSTRAP_PASSWORD: disposable-restore-test-password-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: npm
+      - name: Verify current frontend not altered
+        run: node scripts/verify-frontend-unchanged.mjs
+      - name: Install PostgreSQL client v16 and locked Node dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-16
+          pg_dump --version
+          pg_restore --version
+          npm ci --ignore-scripts
+      - name: Execute archive security unit tests
+        run: node --test scripts/ops/*.test.mjs
+      - name: Initialize disposable source database
+        run: CV_INIT_DB=1 node backend/setup.mjs
+      - name: Prove actual encrypted backup and restore into second PostgreSQL database
+        run: node scripts/ops/database-restore-ci.mjs
+      - name: Never upload production data or backup artifacts
+        run: echo "Encrypted backup archives are intentionally ephemeral and never uploaded to public GitHub artifacts."
