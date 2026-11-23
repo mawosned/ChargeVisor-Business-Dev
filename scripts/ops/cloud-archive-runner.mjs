@@ -17,9 +17,14 @@ function postgresUrl(){
 }
 function runUploader(filepath){
   return new Promise((done,reject)=>{
+    // Least privilege: uploader receives only Microsoft auth/config, never DB URL or AES key.
+    const allowed=['PATH','LANG','SSL_CERT_FILE','CV_MS_TENANT_ID',
+      'CV_MS_CLIENT_ID','CV_MS_CLIENT_SECRET','CV_BACKUP_SITE_ID','CV_BACKUP_FOLDER'];
+    const scopedEnv={BACKUP_FILE:filepath};
+    for(const name of allowed)if(process.env[name])scopedEnv[name]=process.env[name];
     const child=spawn(process.env.CV_PYTHON_BINARY||'python3',
       ['scripts/ops/sharepoint-uploader.py'],{
-        cwd:resolve(process.cwd()),env:{...process.env,BACKUP_FILE:filepath},
+        cwd:resolve(process.cwd()),env:scopedEnv,
         stdio:['ignore','pipe','pipe']
       });
     let output='',error='';
