@@ -177,7 +177,8 @@ export async function restoreIntoEmptyDatabase({
   try{
     await decryptArchiveToFile(backup,plain,key);
     await runClient(pgRestoreBinary,
-      ['--exit-on-error','--single-transaction','--no-owner','--no-acl',plain],
+      ['--exit-on-error','--single-transaction','--no-owner','--no-acl',
+       '--dbname='+target.dbname,plain],
       target.env);
     return {restored:true,database:target.dbname};
   }finally{await rm(dir,{recursive:true,force:true});}
