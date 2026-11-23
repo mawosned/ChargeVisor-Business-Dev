@@ -48,14 +48,24 @@
   };
   const controlIcon=command=>'<svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="currentColor">'+chargeControlIcon[command]+'</svg>';
   function pointControls(point,status){
-    if(getStation(point)?.isSimulator||point.disabled)return '';
-    const active=activeCharge(point);
+    if(getStation(point)?.isSimulator||point.disabled||!liveForPoint(point)?.connected)return '';
+    const active=activeCharge(point),connectorStatus=exactConnector(point)?.status;
     const play=()=>controlButton(point,'start',active?'Ladevorgang fortsetzen':'Ladevorgang starten',controlIcon('start'));
+    const pause=()=>controlButton(point,'pause','Ladevorgang pausieren',controlIcon('pause'));
     const stop=()=>controlButton(point,'stop','Ladevorgang stoppen',controlIcon('stop'));
-    if(status==='Lädt')return (active?.remote_paused?'':controlButton(point,'pause','Ladevorgang pausieren',controlIcon('pause')))+stop();
-    if(status==='Pausiert')return stop()+(active?.remote_paused?play():'');
-    if(status==='Verbunden'&&!active&&['Preparing','SuspendedEV','SuspendedEVSE'].includes(exactConnector(point)?.status))return play();
-    return active&&status==='Verbunden'?stop():'';
+    // The physical OCPP state wins over an outdated remote_paused database
+    // flag: if the charger is charging, show Pause only and allow re-pause.
+    if(connectorStatus==='Charging'||status==='Lädt')return active?pause():'';
+    // Only a confirmed remotely paused session offers both Resume and Stop.
+    if(active?.remote_paused===true)return play()+stop();
+    // An active but car-suspended transaction can be paused first, then
+    // resumed or stopped. It must NOT display Play (backend would reject it).
+    if(active&&['Preparing','SuspendedEV','SuspendedEVSE'].includes(connectorStatus))return pause();
+    if(active)return stop(); // Stop is the safe recovery action for mismatched states.
+    // Finishing can mean "car still plugged in after StopTransaction". Try
+    // RemoteStart only on user request; the physical charger may reject it.
+    if(['Preparing','SuspendedEV','SuspendedEVSE','Finishing'].includes(connectorStatus))return play();
+    return '';
   }
   function showPremium(feature){
     modal('Premium-Funktion','<p>'+premiumText+'</p><div class="modal-actions"><button class="btn ghost" data-close-modal>Schließen</button>'+
@@ -425,6 +435,30 @@
     });
   }
 
+  async function readCompositeSchedule(button){
+    if(preview||state.role!=='super'||!state.tenant)return;
+    const point=myChargers().find(p=>p.id===button.dataset.readComposite);
+    if(!point||getStation(point)?.isSimulator)return;
+    button.disabled=true;
+    try{
+      const result=await api('/api/ocpp/composite-schedule','POST',
+        {...scope(),pointId:point.id});
+      const data=result.diagnostic||{};
+      const parts=Array.isArray(data.periods)?data.periods:[];
+      const rows=data.reported?parts.map(p=>
+        '<li>Ab '+esc(p.startSecond)+' s: <strong>'+esc(p.limit)+' '+esc(data.unit)+
+        '</strong>'+(p.numberPhases?' · '+esc(p.numberPhases)+' Phasen':'')+'</li>').join(''):'';
+      modal('OCPP-Ladeprofil – '+point.location,
+        '<p><strong>GetCompositeSchedule · Connector '+esc(result.connectorId)+'</strong></p>'+
+        (rows?'<ul>'+rows+'</ul>':'<p>Kein auswertbarer Ladeplan übermittelt.</p>')+
+        '<p class="inline-help">'+esc(data.note||
+          'Keine Aussage über den Ursprung der Strombegrenzung möglich.')+'</p>'+
+        '<p class="inline-help">Nur ausgelesen. Keine Änderung an Ladestrom, Profilen oder Wallbox.</p>'+
+        '<div class="modal-actions"><button type="button" class="btn ghost" data-close-modal>Schließen</button></div>');
+    }catch(error){toast('OCPP-Ladeprofil: '+error.message);}
+    finally{if(button.isConnected)button.disabled=false;}
+  }
+
   async function runChargingCommand(button){
     if(preview||button.disabled)return;
     const command=button.dataset.ocppControl,label=button.getAttribute('aria-label');
@@ -642,7 +676,8 @@
               (shared&&list.length>1?'Gemeinsame OCPP-Verbindung: Status nur bei vorhandener Connector-Meldung.':'')+'</p>';
             if(state.role!=='user')html+='<div class="point-actions"><button class="btn ghost small" data-access="'+esc(p.id)+'">Nutzer zuweisen</button></div>';
             if(state.role==='super')html+='<div class="point-actions"><button class="btn ghost small" data-edit-point="'+esc(p.id)+'">Umbenennen</button><button class="btn ghost small" data-toggle-point="'+esc(p.id)+'">'+(p.disabled?'Aktivieren':'Deaktivieren')+'</button>'+
-              (station&&!station.isSimulator&&p.ocppId?'<button class="btn ghost small" data-charge-mode="'+esc(p.id)+'">Lademodus: '+(p.freechargeEnabled?'Freecharge':'RFID')+'</button>':'')+'</div>';
+              (station&&!station.isSimulator&&p.ocppId?'<button class="btn ghost small" data-charge-mode="'+esc(p.id)+'">Lademodus: '+(p.freechargeEnabled?'Freecharge':'RFID')+'</button>':'')+
+              (station&&!station.isSimulator&&p.ocppId?'<button type="button" class="btn ghost small" data-read-composite="'+esc(p.id)+'">OCPP-Ladeprofil prüfen</button>':'')+'</div>';
             if(station&&!station.isSimulator)html+='<div class="point-actions">'+
               (state.role==='super'?'<button class="btn ghost small" data-extend-station="'+esc(station.id)+'">Ladepunkte erweitern</button>':'')+
               (state.role!=='user'?controlButton(p,'reset','Ladestation neu starten','Ladestation neu starten',canReset()):'')+'</div>';
@@ -1718,6 +1753,8 @@
   if(extend){extendStation(extend.dataset.extendStation);return;}
   const chargePermission=e.target.closest('[data-charge-permissions]');
   if(chargePermission){changeChargePermissions(chargePermission.dataset.chargePermissions);return;}
+  const composite=e.target.closest('[data-read-composite]');
+  if(composite){await readCompositeSchedule(composite);return;}
   const command=e.target.closest('[data-ocpp-control]');
   if(command){await runChargingCommand(command);return;}
   const health=e.target.closest('[data-site-health],[data-fault-point]');
