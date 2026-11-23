@@ -24,6 +24,15 @@ jobs:
           $errors = $null
           [System.Management.Automation.Language.Parser]::ParseFile('tools/ocpp-chain-simulator/UPDATE-SIMULATOR.ps1', [ref]$tokens, [ref]$errors) | Out-Null
           if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Error $_.Message }; exit 1 }
+      - name: Parse private release and rollback scripts without executing them
+        shell: pwsh
+        run: |
+          foreach ($path in @('scripts/ops/prepare-private-release.ps1', 'scripts/ops/prepare-private-rollback.ps1')) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Error $_.Message }; exit 1 }
+          }
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'

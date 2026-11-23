@@ -1,0 +1,66 @@
+name: Independent availability monitor (operator opt-in)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/15 * * * *'
+
+# OFF until an always-on production service has been accepted.
+# Configure repository variables CV_MONITOR_ENABLED=1 and
+# CV_MONITOR_TARGET_URL=https://.../health only after production launch.
+# This public dev workflow never receives a production database secret.
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: chargevisor-availability-monitor
+  cancel-in-progress: false
+
+jobs:
+  external-health:
+    if: ${{ vars.CV_MONITOR_ENABLED == '1' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+      - name: Probe HTTP + real authentication and database readiness (3 tries)
+        id: probe
+        continue-on-error: true
+        env:
+          CV_MONITOR_REQUIRE_OPS: '1'
+          CV_MONITOR_TOKEN: ${{ secrets.CV_OPS_MONITOR_TOKEN }}
+          CV_MONITOR_TARGET_URL: ${{ vars.CV_MONITOR_TARGET_URL }}
+        run: node scripts/ops/health-probe.mjs
+      - name: Open one incident on outage, close on recovery
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          PROBE_RESULT: ${{ steps.probe.outcome }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner=context.repo.owner, repo=context.repo.repo;
+            const title='ChargeVisor production availability incident [automatic]';
+            const issues=await github.paginate(github.rest.issues.listForRepo,{
+              owner,repo,state:'open',per_page:100
+            });
+            const existing=issues.find(x=>!x.pull_request&&x.title===title);
+            const bad=process.env.PROBE_RESULT!=='success';
+            if(bad&&!existing){
+              await github.rest.issues.create({
+                owner,repo,title,
+                body:'External /health probe failed after 3 attempts. Verify hosting, database, OCPP connections and backups. No customer data or credentials are included. Check the matching GitHub Actions run.'
+              });
+            }
+            if(!bad&&existing){
+              await github.rest.issues.createComment({
+                owner,repo,issue_number:existing.number,
+                body:'Availability probe recovered. Verify OCPP station status and interrupted sessions before marking operationally recovered.'
+              });
+              await github.rest.issues.update({owner,repo,issue_number:existing.number,state:'closed'});
+            }
+            if(bad)core.setFailed('External ChargeVisor health check failed; incident raised/left open');

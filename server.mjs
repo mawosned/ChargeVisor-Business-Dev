@@ -4,6 +4,7 @@ import {setup} from './backend/setup.mjs';
 import {ensureStructureSchema,createStructureApi} from './backend/structure.mjs';
 import {ensureOcppSchema,createOcppBridge,createOcppApi} from './backend/ocpp.mjs';
 import {createVirtualFleet} from './backend/virtual-fleet.mjs';
+import {createOpsMonitorEndpoint} from './backend/ops-monitor-endpoint.mjs';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 
@@ -41,6 +42,7 @@ const virtualFleet=auth.pool&&process.env.CV_VIRTUAL_AUTO==='1'?
 const ocppApi=createOcppApi({pool:auth.pool,getActor:auth.getActor,bridge:ocppBridge,port,env:process.env});
 const structure=createStructureApi(process.env,{pool:auth.pool,getActor:auth.getActor});
 const microsoft=createMicrosoftApi(process.env,{pool:auth.pool,getActor:auth.getActor});
+const opsMonitor=createOpsMonitorEndpoint({pool:auth.pool,env:process.env});
 const canonical=process.env.CV_PUBLIC_URL?.trim().replace(/\/+$/,'');
 const publicHost=['https://www.chargevisor.de','https://chargevisor.de'].includes(canonical)?new URL(canonical).host:null;
 const httpServer=createServer(async (req, res) => {
@@ -50,6 +52,7 @@ const httpServer=createServer(async (req, res) => {
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Cache-Control', 'no-store');
+  if(pathname==='/api/ops/health'){await opsMonitor(req,res);return;}
   if(pathname.startsWith('/api/')&&!await auth.authorizeRolePreview(req,res,pathname))return;
   if(pathname.startsWith('/api/ocpp/')){await ocppApi(req,res,pathname);return;}
   if(pathname.startsWith('/api/microsoft/')){await microsoft.handle(req,res,pathname);return;}
