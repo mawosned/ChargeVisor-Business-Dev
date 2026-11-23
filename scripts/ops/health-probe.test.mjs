@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {validateMonitorUrl,probeOnce,probeWithRetries} from './health-probe.mjs';
+import {validateMonitorUrl,probeOnce,probeWithRetries,probeStationHealth} from './health-probe.mjs';
 
 const url='https://chargevisor-business-demo.onrender.com/health';
 const response=(data,status=200)=>({status,json:async()=>data});
@@ -43,4 +43,30 @@ test('Temporary outage retries, persistent outage fails closed',async()=>{
     fetcher:async()=>{throw Error('No route');}});
   assert.equal(down.healthy,false);
   assert.equal(down.reason,'NETWORK_OR_RESPONSE_ERROR');
+});
+
+test('Operator token probes real station count and refuses zero, stale or disconnected chargers',async()=>{
+  const token='o'.repeat(50);
+  const seen=[];
+  const fetcher=async(url,opts)=>{
+    seen.push({url,authorization:opts.headers.Authorization});
+    return response({status:'ok',stationCounts:{
+      scanned:2,online:2,stale:0,disconnected:0
+    }});
+  };
+  const ok=await probeStationHealth(url,token,{fetcher});
+  assert.equal(ok.healthy,true);
+  assert.ok(seen[0].url.endsWith('/api/ops/health'));
+  assert.equal(seen[0].authorization,'Bearer '+token);
+  assert.equal((await probeStationHealth(url,'invalid',{fetcher})).healthy,false);
+  const stale=await probeStationHealth(url,token,{fetcher:async()=>response({
+    status:'ok',stationCounts:{scanned:2,online:1,stale:1,disconnected:0}
+  })});
+  assert.deepEqual(stale,{healthy:false,reason:'STATIONS_DEGRADED'});
+  const empty=await probeStationHealth(url,token,{fetcher:async()=>response({
+    status:'ok',stationCounts:{scanned:0,online:0,stale:0,disconnected:0}
+  })});
+  assert.equal(empty.healthy,false);
+  const denied=await probeStationHealth(url,token,{fetcher:async()=>response({},401)});
+  assert.deepEqual(denied,{healthy:false,reason:'STATIONS_HTTP_401'});
 });
