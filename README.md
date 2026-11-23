@@ -1,5 +1,44 @@
 # ChargeVisor Business – Entwicklungsstand und Sicherheitsregeln (23.11.2026)
 
+## Windows-Simulator: geprüfte Updatequelle und gewohnter PowerShell-Start (23.11.2026)
+
+**Konkreter lokaler Benutzerpfad** (nur Dokumentation, kein Zugriff auf diesen PC):
+`C:\1_WORKPLACE\1.1_EV\1_WALECTRA\ChargeVisor\NEU\ChargeVisor-Business-feature-mobilityhouse-ocpp-chain-tests`
+
+**Bisheriger Startweg des Nutzers** (der Updater wird rekursiv gesucht, Sicherungsordner `backup-<Zahl>` ausgenommen):
+
+```powershell
+$root = 'C:\1_WORKPLACE\1.1_EV\1_WALECTRA\ChargeVisor\NEU\ChargeVisor-Business-feature-mobilityhouse-ocpp-chain-tests'
+
+$updater = Get-ChildItem -LiteralPath $root -Recurse -File -Filter UPDATE-SIMULATOR.ps1 |
+    Where-Object { $_.FullName -notmatch '\\backup-\d' } |
+    Select-Object -First 1
+
+if (!$updater) { throw 'Updater nicht gefunden' }
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $updater.FullName
+```
+
+**Achtung, dieses alte Verfahren kann die FALSCHE VERSION laden.** Am 23.11.2026 wurde der Quellcode beider Updater ausdrücklich verglichen:
+- Im **alten privaten** Branch `mawosned/ChargeVisor-Business` / `feature/mobilityhouse-ocpp-chain-tests` enthält `tools/ocpp-chain-simulator/UPDATE-SIMULATOR.ps1` tatsächlich `$repo = 'mawosned/ChargeVisor-Business'`. Der alte Updater lädt damit weitere Dateien aus der **alten privaten Feature-Version**, nicht automatisch den heutigen Entwicklungsstand.
+- In der **aktuellen öffentlichen Entwicklung** `mawosned/ChargeVisor-Business-Dev` / `main` ist die gleichnamige Datei korrekt auf `$repo = 'mawosned/ChargeVisor-Business-Dev'` und `param([string]$Branch = 'main')` eingestellt.
+- **Beide Updater aktualisieren ihre eigene Datei `UPDATE-SIMULATOR.ps1` nicht** (sie fehlt in ihrer `$files`-Liste). Wer einmal den alten Updater auf dem PC liegen hat, landet durch bloßes wiederholtes Ausführen nicht automatisch bei der neuen öffentlichen Version.
+- Der genaue lokale Inhalt ist **noch nicht geprüft**, da keine Verbindung zum Windows-Dateisystem vorliegt. Der Ordnername weist auf die alte Feature-ZIP hin, beweist aber nicht, welche Datei der Nutzer heute tatsächlich dort liegen hat.
+
+**Sicherer Einmalschritt:** Zuerst den lokalen Updater aus dem angegebenen Ordner ermitteln, die Zeile `$repo = ...` anzeigen und vor einem Update eine Kopie der vorhandenen Datei anlegen. Falls sie noch auf `ChargeVisor-Business` zeigt, die **einzelne Updater-Datei** gezielt aus `https://github.com/mawosned/ChargeVisor-Business-Dev/blob/main/tools/ocpp-chain-simulator/UPDATE-SIMULATOR.ps1` beziehen, Inhalt auf `ChargeVisor-Business-Dev` + `main` kontrollieren und anschließend den gewohnten PowerShell-Aufruf wiederholen. Kein pauschales Überschreiben des gesamten Arbeitsordners. Nicht unkritisch den ersten Treffer nehmen, wenn mehrere aktive Updater gefunden werden. GitHub-CLI- und Python-Voraussetzungen des neuen Updaters beachten.
+
+**Bewährter Schnellstart nach korrekter Aktualisierung:** Eine eigens erstellte, **nicht real genutzte** OCPP-Teststation (eigene WSS-URL, eigene Charge-Point-ID und eigenes Basic-Auth-Passwort) verwenden, niemals die echte Lumina-Identität oder ihre Zugangsdaten. `START-SIMULATOR.cmd` im `tools/ocpp-chain-simulator`-Ordner startet die vorhandene GUI. Die GUI kann Master + bis zu 20 Connectoren, Laden/Stoppen, Fehler, RFID, Reconnect und 5- bzw. 120-Minuten-Dauertests simulieren.
+
+**Wichtiger Isolationsunterschied:** Der **erweiterte Windows-Ketten-Simulator** arbeitet laut seiner eigenen aktuellen README mit einer als `normale` OCPP-Hardware angelegten **TEST-Station**, nicht zwingend mit `is_simulator=true`. Seine Testtransaktionen können dadurch wie reale Ladevorgänge aussehen und in Auswertungen eingehen. Deshalb ausschließlich in einem klar getrennten Testmandanten/Testsystem ohne reale Abrechnung betreiben, bis die Trennung code- und datenbankseitig nachweisbar ist. Der **separate, ältere `scripts/ocpp-test-wallbox.py`** dagegen sieht eine explizit virtuelle Teststation und `simulated=true` vor. Nicht beide Szenarien vermischen.
+
+**Reale Referenz-Hardware beibehalten:** Im bisherigen ChargeVisor-Backend ist eine **echte** Enelion Lumina eingerichtet (Screenshot: `Lumina Garage`, `Stellplatz 1`, Master Connector 1, `Bereit`); laut Nutzer war sie bereits angeschlossen und hat tatsächlich erfolgreich geladen. Kein Simulator. Nicht löschen, nicht neu provisionieren, nicht auf eine Simulator-ID umstellen. Weitere echte Wallboxen nur mit eigenen OCPP-Zugangsdaten anschließen.
+
+**Architektur- und Freigabestand:** `ChargeVisor-Business-Dev` öffentlich = Weiterentwicklung/Tests (öffentlich wegen früherer GitHub-Actions-Abrechnungssperre des privaten Repo). `ChargeVisor-Business` privat = Render-gebundener, bestehender Stand. Neon Free zunächst behalten, ggf. später zu Render PostgreSQL wechseln, falls sinnvoll. Render-Einstellungen bleiben wie vom Nutzer gewünscht; **kein ungefragter privater `main`-Push/Deploy**. Erst Simulator-/CI-/Hardwaretests und Freigabe, dann kontrolliert übernehmen.
+
+**Konkreter nächster Schritt beim nächsten Chat:** Den lokalen Inhalt der Zeile `$repo = ...` zeigen lassen, einmalig den alten Updater auf die geprüfte öffentliche Dev-Version umstellen (mit Sicherung), vorhandene Teststation verbinden, 5-Minuten-Rauchtest und danach längeren Dauertest durchführen. Ergebnisse und echte Hardwarezustände strikt getrennt kontrollieren. Testerfolg erst nach Log/Screenshot oder tatsächlichem Live-Nachweis markieren.
+
+
+
 ## Reale Enelion Lumina bereits verbunden – Hardware-Referenz (23.11.2026)
 
 **Verifizierte Benutzerinformation und Screenshot, keine neue Live-Abfrage:** Im bestehenden **privaten** ChargeVisor-Backend ist bereits eine **echte physische Enelion Lumina** eingerichtet. Der Nutzer bestätigt ausdrücklich, dass diese Wallbox **bereits erfolgreich verbunden war und real geladen hat**. Der Screenshot aus `Standorte & Ladepunkte` zeigt die Station **„Lumina Garage“** mit einem Ladepunkt **„Stellplatz 1“**, OCPP **Connector #1 · Master**, Status **„Bereit“**, **0 kW** zum Zeitpunkt des Screenshots. **Die Statusanzeige zeigt keinen aktuellen Ladevorgang; erfolgreiche frühere reale Ladevorgänge sind Nutzerangabe, kein hier neu ausgeführter Hardwaretest.** Keine OCPP-Identität, Passwörter, RFID-Daten oder personenbezogene Nutzerinformationen in einem öffentlichen README ablegen.
