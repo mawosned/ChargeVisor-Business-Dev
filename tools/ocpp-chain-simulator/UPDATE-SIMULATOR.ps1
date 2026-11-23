@@ -21,7 +21,7 @@ if ($LASTEXITCODE -ne 0) {
 $files = @('desktop_simulator.py', 'chain_simulator.py', 'smart_charging.py',
     'ocpp_coverage.py', 'ocpp_test_console.py', 'ocpp_soak.py', 'paced_plan.py', 'backend_verifier.py', 'firmware_lifecycle.py', 'power_cycle_scenario.py', 'requirements.txt',
     'test_chain_simulator.py', 'test_advanced_ocpp.py',
-    'test_smart_charging.py', 'test_coverage.py', 'test_soak.py', 'test_paced_plan.py', 'test_tk_master.py', 'test_backend_verifier.py', 'test_firmware_lifecycle.py', 'test_power_cycle_scenario.py',
+    'test_smart_charging.py', 'test_coverage.py', 'test_soak.py', 'test_reconnect.py', 'test_paced_plan.py', 'test_tk_master.py', 'test_backend_verifier.py', 'test_firmware_lifecycle.py', 'test_power_cycle_scenario.py',
     'START-SIMULATOR.cmd', 'start-local.ps1', 'README.md')
 $stage = Join-Path $env:TEMP ('CV-ocpp-update-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $stage -Force | Out-Null
