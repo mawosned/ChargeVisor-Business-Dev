@@ -1,5 +1,17 @@
 # ChargeVisor Business – Entwicklungsstand und Sicherheitsregeln (23.11.2026)
 
+## VERBINDLICHE KORREKTUR – Windows-OCPP-Simulator nutzt normale Wallbox-Zugangsdaten (23.11.2026)
+
+**Entscheidung des Nutzers:** Der Simulator muss sich **wie eine echte Wallbox** verhalten: OCPP-Server-WSS-URL, Charge-Point-ID und das zugehörige OCPP-Basic-Auth-Passwort direkt aus ChargeVisor eingeben und damit OCPP 1.6J über die regulären Backend-Endpunkte sprechen. **Keine Verpflichtung**, eine speziell als `is_simulator=true` markierte Wallbox zu wählen. Das ist eine Sicherheits-/Datenkennzeichnung im Backend, **kein gesondertes OCPP-Verbindungsprotokoll**. Auch die normale Test-Ladekette `Ladekette Tiefgarage Süd` (`cv6zgvs85d`, 6 Connectoren) muss wieder funktionieren.
+
+**Ursache der HTTP-403-Regression** vom 23.11.: Eine voreilig eingeführte Client-Änderung sendete den Sonder-Header `X-ChargeVisor-Test-Wallbox: 1`. Der bestehende Server lehnt solche Header bei regulären `is_simulator=false`-Stationen absichtlich ab. Deshalb war die korrekte Standard-OCPP-Verbindung trotz gültiger ID/Passwort blockiert. **Fix im öffentlichen Entwicklungs-PR:** Sonder-Header im Desktop-Client entfernt, OCPP 1.6J + Standard-HTTP-Basic-Auth beibehalten, Reconnect-/Soak-Dauerprüfungen unverändert. Kein Backend-/Render-/Frontend-Update erforderlich. Regressionstest prüft, dass die Desktop-GUI nie wieder einen solchen Sonder-Header in ihren normalen Handshake einfügt.
+
+**Klarstellung Daten:** Mit normalen Stationsdaten speichert Neon künstliche Test-Ladevorgänge derzeit `simulated=false`, genau wie bei echten Geräten. Bei einer ausdrücklich virtuellen `is_simulator=true`-Station sind sie als Simulation markiert. Die Wahl liegt beim Nutzer; für spätere reale Kundenabrechnung solche Tests abgrenzen. Die aktuelle eigene Enelion Lumina unter ihrer realen ID **nicht zugleich vom Simulator verbinden**.
+
+**Geplanter Ablauf:** Änderungs-PR mit automatischer CI prüfen → in öffentliches Dev-`main` übernehmen → **lokal auf Windows** mit geprüftem Updater aktualisieren → mit der **bisherigen** `cv6zgvs85d` und sechs Connectoren sowie zugehörigem Passwort verbinden → fünf Minuten testen → anschließend 120-Minuten-Dauertest. Das Update einer GitHub-Datei installiert sich NICHT von selbst auf dem PC. Bisheriger Render-Commit, UI und Datenbank unverändert. **WICHTIG OFFEN:** echtes verschlüsseltes Neon→SharePoint-Backup, Download und isolierter Restore noch zu testen.
+
+
+
 ## BESTÄTIGT: OCPP-Simulator-Reconnect in DEV – sechs CI-Workflows grün (23.11.2026)
 
 **Stand:** <https://github.com/mawosned/ChargeVisor-Business-Dev/pull/11> ist nach sechs erfolgreich abgeschlossenen GitHub-CI-Workflows in `mawosned/ChargeVisor-Business-Dev/main` gemergt. Merge-Commit: `ee9788eda991e1e9fe3f3171ceb5f20b5774a5c5`. Automatisierte Tests für den Simulator-Reconnect, den Soak-Bericht, den ChargeVisor-Backend-Regressionsschutz, das Browser-Frontend und Mobility House sind erfolgreich. **Kein Code der ChargeVisor-Web-UI wurde verändert, kein Deployment auf Render**, das weiterhin den bisherigen privaten Commit nutzt. Änderungen betreffen ausschließlich `tools/ocpp-chain-simulator/` und READMEs.
