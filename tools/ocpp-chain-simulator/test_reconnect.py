@@ -3,6 +3,7 @@
 These tests do not connect to Render or write ChargeVisor production data.
 """
 import asyncio
+import ast
 import tempfile
 import unittest
 from pathlib import Path
@@ -73,6 +74,24 @@ class TransportLogTests(unittest.TestCase):
                    "simulator-transport.log").read_text(encoding="utf-8")
             self.assertIn("[REDACTED]", log)
             self.assertNotIn("PRIVATE_PASSWORD", log)
+
+class StandardOcppHandshakeTests(unittest.TestCase):
+    def test_handshake_uses_standard_ocpp_headers_only(self):
+        """Real charging station identity must not require a special simulator flag."""
+        source = (Path(__file__).resolve().parent /
+                  "desktop_simulator.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        app = next(node for node in tree.body
+                   if isinstance(node, ast.ClassDef) and node.name == "SimulatorApp")
+        method = next(node for node in app.body
+                      if isinstance(node, ast.AsyncFunctionDef) and node.name == "_connect")
+        handshake = ast.get_source_segment(source, method)
+        self.assertIn('extra_headers={"Authorization": "Basic " + auth}', handshake)
+        self.assertIn('subprotocols=["ocpp1.6"]', handshake)
+        self.assertNotIn("X-ChargeVisor-Test-Wallbox", handshake)
+        self.assertNotIn("is_simulator", handshake)
+
+
 
 
 if __name__ == "__main__":
