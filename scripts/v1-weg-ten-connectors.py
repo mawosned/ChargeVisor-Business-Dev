@@ -117,7 +117,7 @@ async def main():
         try:
             boot = await request(cp,call.BootNotification(
                 charge_point_vendor="WEG CI Test",
-                charge_point_model="10 Connector Master (11 kW each)"),"boot")
+                charge_point_model="WEG-10CP-11KW"),"boot")
             assert boot.status == "Accepted"
             await request(cp,call.Heartbeat(),"heartbeat")
             # Ramp up ten separate transactions one connector at a time.
