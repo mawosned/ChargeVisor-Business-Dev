@@ -1,5 +1,36 @@
 # ChargeVisor Business – Entwicklungsstand und Sicherheitsregeln (23.11.2026)
 
+## Bestätigter Windows-Simulator-Start – 23.11.2026 (aktuell)
+
+**Ergebnis nach fehlgeschlagenem Updater-Versuch: DER BESTEHENDE SIMULATOR STARTET WIEDER.** Der Nutzer hat bestätigt, dass nach Ausführung des folgenden PowerShell-Blocks die vorhandene Windows-Simulator-Oberfläche wieder funktioniert. Das belegt den **lokalen GUI-Start**, aber noch keinen neuen Download, keine aktuelle Versionsnummer, keine aktive OCPP-Verbindung und keinen erfolgreichen Lade-/End-to-End-Test.
+
+**Ab sofort zuerst diesen funktionierenden Startweg nutzen – ohne automatisches Update:**
+
+~~~powershell
+$root = 'C:\1_WORKPLACE\1.1_EV\1_WALECTRA\ChargeVisor\NEU\ChargeVisor-Business-feature-mobilityhouse-ocpp-chain-tests'
+
+$starts = @(Get-ChildItem -LiteralPath $root -Recurse -File -Filter 'START-SIMULATOR.cmd' |
+    Where-Object { $_.FullName -notmatch '\\backup-\d' })
+
+if ($starts.Count -eq 1) {
+    Start-Process -FilePath $starts[0].FullName -WorkingDirectory $starts[0].DirectoryName
+}
+else {
+    $starts | Select-Object -ExpandProperty FullName
+    Write-Host "Gefundene Simulator-Starts: $($starts.Count)"
+}
+~~~
+
+**Warum das funktioniert:** Der Block sucht die reale Startdatei rekursiv, statt eine vermutete Ordnerstruktur vorauszusetzen. Nur bei **genau einem** Treffer wird die GUI gestartet; andernfalls erscheinen die gefundenen Pfade/Anzahl. Er lädt nichts herunter, ersetzt keine Dateien, ändert kein GitHub/Render/Neon und unterbricht nicht die echte Lumina. Für eine neue Unterhaltung diesen Block als **letzten bestätigten funktionierenden Start** bevorzugen.
+
+**Gescheiterter Einmalversuch davor (keine Reparatur behaupten):** Ein vorheriger PowerShell-Block ging irrtümlich von einem festen Ort für `UPDATE-SIMULATOR.ps1` unter `tools\ocpp-chain-simulator` aus. Die Benutzerkonsole zeigte `Copy-Item: Pfad nicht vorhanden` und `WriteAllBytes: Ein Teil des Pfades konnte nicht gefunden werden`. Die abschließende Ausgabe `Neuer DEV-Updater installiert` war nur eine irreführende `Write-Host`-Zeile; tatsächlich wurde **kein erfolgreicher Austausch des Updaters** bestätigt. Der genaue Installationspfad/Updater-Stand auf Windows wurde nicht aus der Ferne verifiziert. Einen neuen Update-Versuch **nicht zur Voraussetzung des Simulator-Starts machen**. Falls später nötig: erst vorhandene Datei(en) lokalisieren, exakte `$repo`-Quelle prüfen, funktionierende Installation sichern und danach gezielt aktualisieren – nicht blind überschreiben.
+
+**Nächste Tests, sobald die GUI läuft:** Eine separate, nicht abrechnungsrelevante Teststation/OCPP-ID und eigenes Passwort einsetzen (niemals Zugangsdaten/Identität der echten Lumina). Verbinden → Boot/Heartbeat/Status → RFID/Authorize → StartTransaction/MeterValues/StopTransaction → Störung/Reconnect. Dann 5-Minuten-Rauchtest, später Dauertest mit lokalem Ergebnisbericht. Der neue Kettensimulator kann künstliche Sessions wie reale Transaktionen speichern; deshalb Testmandant/Teststation klar abgrenzen und die Trennung in Historie/Reports prüfen.
+
+**Reale Enelion Lumina erhalten:** `Lumina Garage / Stellplatz 1` ist laut Nutzer echte bereits erfolgreich ladende Hardware; nicht als Simulator einsetzen, nicht neu provisionieren, nicht unterbrechen. Öffentliche Entwicklung `ChargeVisor-Business-Dev` und privater Render-Stand `ChargeVisor-Business` bleiben getrennt; Neon Free und bestehende Render-Freigabe bleiben unverändert. Keine finanzielle Änderung oder privater Deploy ohne Benutzerfreigabe.
+
+
+
 ## Windows-Simulator: geprüfte Updatequelle und gewohnter PowerShell-Start (23.11.2026)
 
 **Konkreter lokaler Benutzerpfad** (nur Dokumentation, kein Zugriff auf diesen PC):
@@ -35,7 +66,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File $updater.FullName
 
 **Architektur- und Freigabestand:** `ChargeVisor-Business-Dev` öffentlich = Weiterentwicklung/Tests (öffentlich wegen früherer GitHub-Actions-Abrechnungssperre des privaten Repo). `ChargeVisor-Business` privat = Render-gebundener, bestehender Stand. Neon Free zunächst behalten, ggf. später zu Render PostgreSQL wechseln, falls sinnvoll. Render-Einstellungen bleiben wie vom Nutzer gewünscht; **kein ungefragter privater `main`-Push/Deploy**. Erst Simulator-/CI-/Hardwaretests und Freigabe, dann kontrolliert übernehmen.
 
-**Konkreter nächster Schritt beim nächsten Chat:** Den lokalen Inhalt der Zeile `$repo = ...` zeigen lassen, einmalig den alten Updater auf die geprüfte öffentliche Dev-Version umstellen (mit Sicherung), vorhandene Teststation verbinden, 5-Minuten-Rauchtest und danach längeren Dauertest durchführen. Ergebnisse und echte Hardwarezustände strikt getrennt kontrollieren. Testerfolg erst nach Log/Screenshot oder tatsächlichem Live-Nachweis markieren.
+**Aktualisierter nächster Schritt beim nächsten Chat:** Der Simulator startet wieder mit dem oben dokumentierten **START-SIMULATOR.cmd-Suchbefehl**. Den Updater nicht als Voraussetzung behandeln. Zuerst GUI und getrennte Teststation kontrollieren; danach 5-Minuten-Rauchtest und längeren Dauertest durchführen. Eine spätere Updater-Korrektur setzt die Prüfung des tatsächlichen lokalen Pfads und eine Sicherung voraus. Ergebnisse und echte Hardwarezustände strikt getrennt kontrollieren. Testerfolg erst nach Log/Screenshot oder tatsächlichem Live-Nachweis markieren.
 
 
 
