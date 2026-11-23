@@ -19,7 +19,7 @@ test('snapshot row leaves numbers/timestamps unchanged and escapes device fields
     started_at:'2026-11-23T11:00:00.000Z',stopped_at:'2026-11-23T12:00:00.000Z',
     meter_start_wh:'12345',meter_stop_wh:'23456',energy_kwh:'11.111',
     stop_reason:'EVDisconnected',signed_meter:'false'});
-  assert.match(row,/'\'=E1'/);
+  assert.match(row,/"'=E1"/);
   assert.equal(row.trimEnd().split(';').length,11);
   assert.ok(row.includes('11.111'));
 });
