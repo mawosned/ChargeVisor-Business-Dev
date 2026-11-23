@@ -11,7 +11,7 @@ import base64
 import contextlib
 import os
 
-import websockets
+from websockets.asyncio.client import connect
 from ocpp.v16 import call
 
 from backend_verifier import BackendVerifier
@@ -27,12 +27,12 @@ async def run_scenario(url,identity,password,id_tag,connector,verifier,
             "Independent scoped simulator-only verifier required")
     basic=base64.b64encode((identity+":"+password).encode()).decode("ascii")
     options=dict(subprotocols=["ocpp1.6"],
-      extra_headers={"Authorization":"Basic "+basic},
+      additional_headers={"Authorization":"Basic "+basic},
       open_timeout=15,ping_interval=20,close_timeout=3)
 
     meter_start=8000+100*connector
     tx_id=None
-    async with websockets.connect(url,**options) as ws:
+    async with connect(url,**options) as ws:
         cp=ChainMaster(identity,ws)
         recv=asyncio.create_task(cp.start())
         try:
@@ -71,7 +71,7 @@ async def run_scenario(url,identity,password,id_tag,connector,verifier,
     await verifier.wait_for(connector,session_active=True,
                             transaction_id=tx_id,timeout_seconds=15)
 
-    async with websockets.connect(url,**options) as ws:
+    async with connect(url,**options) as ws:
         cp=ChainMaster(identity,ws)
         recv=asyncio.create_task(cp.start())
         try:
