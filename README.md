@@ -1,5 +1,14 @@
 # ChargeVisor Business – Entwicklungsstand und Sicherheitsregeln (23.11.2026)
 
+## WICHTIG – SharePoint-Backup MUSS NOCH REAL GETESTET WERDEN (offener Punkt, 23.11.2026)
+
+**Nicht vergessen oder als erledigt markieren:** Die automatisierte, verschlüsselte **Neon-PostgreSQL-18 → Microsoft 365 SharePoint**-Sicherung ist **noch nicht erfolgreich mit der echten ChargeVisor-Testdatenbank getestet**. Der Ordner `ChargeVisorBackups/Database-Backups` war bei letzter Prüfung leer. In `ChargeVisor-Business-Dev` existieren und bestehen bereits **Offline-/CI-Tests** für AES-256-GCM-Datenbankbackup, Restore in separater Testdatenbank und den (simulierten) SharePoint-Uploader. **Ein echter Microsoft-Graph-App-Upload, Download und Restore fehlen weiterhin.** Der ältere private GitHub-Actions-Workflow wurde durch **GitHub-Billing**, nicht Render Free, blockiert und würde derzeit noch einen **unverschlüsselten** Dump hochladen: **Nicht einfach starten, sondern vorher den sicheren Dev-Workflow integrieren.**
+
+**Später verbindlich nachholen:** (1) sicheren Verschlüsselungsschlüssel getrennt verwahren, (2) echten verschlüsselten PG18-Dump in SharePoint erzeugen, (3) Datei und Größe kontrollieren, (4) sie herunterladen und in eine **leere, isolierte** PostgreSQL-Testdatenbank wiederherstellen, (5) täglichen Scheduler mit Fehleralarm aktivieren, (6) zweimal wöchentlich verschlüsselten Session-CSV-Export verifizieren. Kein unverschlüsselter Datenbank-Dump in öffentliche Repositories, GitHub-Artifacts oder SharePoint.
+
+**JETZIGE PRIORITÄT:** OCPP-Backend-Funktionen weiterentwickeln, den geprüften Dev-Stand kontrolliert auf den bereits laufenden **Render Starter** für unsere **Testumgebung** bringen, anschließend **eigene echte Enelion Lumina und getrennte OCPP-Simulatoren** verbinden und testen. **Der offene Backup-Test ist derzeit kein Blocker für reine Entwicklungs- und Test-Deployments**; alle bisherigen ChargeVisor-Daten sind laut Nutzer Testdaten. Vor dem späteren Betrieb mit zahlenden Kunden muss die vollständige Sicherungs- und Restore-Kette jedoch funktionieren.
+
+
 ## Klarstellung des Testbetriebs – 23.11.2026 (Vorrang vor früheren Produktiv-Warnungen)
 
 **Ausdrückliche Nutzerkorrektur:** Wir befinden uns mit ChargeVisor **weiterhin ausschließlich in Entwicklung und Tests**. Die reale, bereits erfolgreich ladende **Enelion Lumina ist die persönliche Testwallbox des Nutzers**; **alle bisher angelegten Kunden, Standorte, Ladevorgänge, Nutzer und Daten sind Testdaten**, keine aktiv zahlenden WEG-Kunden. Das physisch echte Gerät bleibt natürlich ein echtes OCPP-Gerät, kein Simulator.
