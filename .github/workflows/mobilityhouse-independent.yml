@@ -96,6 +96,14 @@ jobs:
         run: python tools/ocpp-chain-simulator/backend_verifier.py --identity "cvci000001" --connector 1 --status Available
       - name: Verify physical-station RFID, transaction retries and role-scoped history
         run: node scripts/physical-ocpp-ci.mjs
+      - name: Independently simulate abrupt power loss and reboot of the OCPP test station
+        env:
+          CV_SIM_URL: ws://127.0.0.1:10000/ocpp/cvci000001
+          CV_SIM_ID: cvci000001
+          CV_SIM_PASSWORD: K7M4R8T2V9H3P6WA
+          CV_SIM_ID_TAG: CV-SIM-TEST
+          CV_ALLOW_SIMULATED_POWER_CUT: '1'
+        run: python tools/ocpp-chain-simulator/power_cycle_scenario.py
       - name: Collect backend logs on failure
         if: failure()
         run: cat /tmp/ocpp-test-server.log || true
