@@ -7,7 +7,7 @@ case "$binary" in
   pg_dump|pg_restore) ;;
   *) echo "Unsupported database client" >&2; exit 2 ;;
 esac
-if [[ "${CV_ALLOW_CI_SEED:-}" != "1" || ( "${PGHOST:-}" != "localhost" && "${PGHOST:-}" != "127.0.0.1" ) ]]; then
+if [[ "${CV_ALLOW_CI_SEED:-}" != "1" || ( -n "${PGHOST:-}" && "${PGHOST:-}" != "localhost" && "${PGHOST:-}" != "127.0.0.1" ) ]]; then
   echo "Refusing Docker PostgreSQL client outside local disposable CI" >&2
   exit 2
 fi
