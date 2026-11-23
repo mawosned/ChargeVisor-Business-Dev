@@ -89,3 +89,42 @@ Schutz aller 14 Frontend-/Asset-Dateien.
 **Wichtig:** Diese Liste ist die fortzuschreibende Abnahmeliste.
 Erst bei tatsächlichem Nachweis Status ändern; niemals aus
 Code-Vorhandensein oder OCPP-ACK automatisch „fertig“ ableiten.
+
+
+## 6. Betriebsfreigabe (Nachtrag: Backup, Monitor, Rollback, Simulator)
+
+Diese Tabelle unterscheidet **Code**, **CI-Test** und **wirklich aktivierten Betrieb**.
+Ein erfolgreich getestetes Skript bedeutet nicht, dass es automatisch jede
+Nacht auf einer produktiven Datenbank ausgeführt wird.
+
+| Funktion | Implementierung | Test/Status | Was zusätzlich erforderlich ist |
+|---|---|---|---|
+| Verschlüsselter PostgreSQL-Komplettdump | IMPLEMENTIERT | Echter PostgreSQL-16-Dump, AES-GCM und Authentifizierung in CI nachgewiesen | Gesicherter Backup-Host, offsite Storage, geheimer Schlüssel |
+| Echter Restore in zweite leere Datenbank | IMPLEMENTIERT | Echter Restore, Record-Vergleich, Integritätsfehler und Überschreibschutz in CI nachgewiesen | Restore der tatsächlichen Produktionsdaten in isolierte Pilot-Datenbank |
+| Wöchentlicher automatischer Restore-Drill mit synthetischer Datenbank | IMPLEMENTIERT | GitHub-CI wöchentlich geplant | GitHub Scheduled Actions ohne SLA |
+| Maschinenlesbarer Betriebszustand (DB, Login, Web) | IMPLEMENTIERT | Node- und HTTP-Probe-Tests | Externer Watchdog nach Produktivfreigabe aktivieren |
+| Operativer Zustand physischer OCPP-Stationen, offene Transaktionen | IMPLEMENTIERT | Auth-/Heartbeat- und SQL-Regressionsprüfungen | Echte Stationsdaten und Alarmschwellen im Pilot prüfen |
+| Externe Störungsmeldung mit Dublettenvermeidung | IMPLEMENTIERT | Workflow vorbereitet, standardmäßig AUS | CV_MONITOR_ENABLED, Ziel-URL und Monitor-Token konfigurieren; Benachrichtigungen abnehmen |
+| Kontrollierter Release-Kandidat nach sechs CI-Prüfungen | IMPLEMENTIERT | Privater PR-Aufbau als Skript; noch nicht gegen produktives GitHub ausgeführt | Hardware-/Backup-Go-No-Go, Bedienerfreigabe |
+| Privater Git-Backup-Branch vor Release | IMPLEMENTIERT | Bestandteil des Release-Skripts | Vor echtem Rollout ausführen und SHA dokumentieren |
+| Applikationsrollback ohne Datenbanklöschung | IMPLEMENTIERT | Privater Draft-Rollback-PR als Skript; echter Rollback-Pilot noch offen | Rollback nach Testdeploy erproben und Zeit messen |
+| Stromausfall mit geöffneter OCPP-Transaktion (independent simulator) | IMPLEMENTIERT | Echte WebSocket-/PostgreSQL-CI (PowerLoss) | Realer Netzstromausfall / tatsächliche Gerätefirmware |
+| Firmware-Download/Install/Boot-Status im OCPP-Desktop-Simulator | IMPLEMENTIERT | Echte unabhängige WebSocket-Unit/Integrationstests | Realer Firmwarepilot, Herstellerfreigabe und gesicherter Recovery-Prozess |
+| Unveränderte ChargeVisor-Oberfläche | GESCHÜTZT | Bytegenaue 14-Dateien-Sperre und Playwright | Keine Frontend-Änderung in diesem Betriebsfreigabeprojekt |
+
+### Vor echtem Kundendeploy weiterhin zwingend offen
+
+- Reale Hardwaretests: Power-Cycle, offline RFID, durchgehende Ladevorgänge,
+  Firmware-Flash mit Fehler-/Wiederanlauf, Lastmanagement inklusive
+  Fehlerverhalten bei Internet-/Lastmanagement-Ausfall.
+- Reale Produktions-Backup-Sicherung, externe Aufbewahrung und Wiederherstellung
+  in einer getrennten Kopie sowie dokumentiertes RPO/RTO.
+- Dauerhaft verfügbares Hosting und ein produktionstauglicher DB-Betrieb.
+  Auf kostenpflichtige Vertrags-/Hostingentscheidungen wird hier bewusst
+  **nicht** zugegriffen.
+- Live-Monitor, Alarmkanal und Probealarm für reale WEGs/Firmenstandorte.
+- Anforderungen an Abrechnung, Messkonformität und Verbrauchsnachweise.
+- Kontrollierter privater Test- und anschließend Produktionsdeploy inklusive
+  Rückfallprobe; die laufende Render-Demo bleibt vorerst unverändert.
+
+**Verbindlicher Ablauf:** [Betriebs- und Freigabe-Runbook](v1-production-readiness-runbook.md).
