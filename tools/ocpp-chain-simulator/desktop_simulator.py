@@ -399,6 +399,11 @@ class SimulatorApp(tk.Tk):
         self.receiver = None
         self.monitor = None
         self.heartbeat_task = None
+        self.reconnect_task = None
+        self.manual_disconnect = True
+        self.connection_settings = None
+        self.recovery_snapshots = {}
+        self.last_meters = {}
         self.url_var = tk.StringVar()
         self.id_var = tk.StringVar(value="CV-MASTER-TEST")
         self.password_var = tk.StringVar()
@@ -786,6 +791,24 @@ class SimulatorApp(tk.Tk):
     def _notify(self, *message):
         self.events.put(message)
 
+    def _transport_diagnostic(self, phase, detail=""):
+        """Append sanitized connection evidence, separate from RFID/GUI events."""
+        from datetime import datetime, timezone
+        stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        safe = str(detail).replace("\n", " ").replace("\r", " ")[:400]
+        secret = self.connection_settings[2] if self.connection_settings else ""
+        if secret:
+            safe = safe.replace(secret, "[REDACTED]")
+        line = f"{stamp} {phase}: {safe}"
+        self._notify("log", "[NETZ] " + line)
+        try:
+            out = Path.home() / "ChargeVisor" / "ocpp-test-results"
+            out.mkdir(parents=True, exist_ok=True)
+            with (out / "simulator-transport.log").open("a", encoding="utf-8") as handle:
+                handle.write(line + "\n")
+        except OSError:
+            self._notify("log", "[NETZ] Diagnoseprotokoll konnte nicht geschrieben werden")
+
     def _schedule(self, coroutine):
         future = asyncio.run_coroutine_threadsafe(coroutine, self.loop)
 
@@ -813,9 +836,9 @@ class SimulatorApp(tk.Tk):
                 approved = messagebox.askyesno(
                     "Externe OCPP-Verbindung",
                     "Du möchtest dich mit einem externen WSS-Server verbinden.\n\n"
-                    "Ist diese OCPP-ID einer eigens für Simulation eingerichteten, aber normal provisionierten Station zugeordnet? "
+                    "Ist diese OCPP-ID im Backend ausdrücklich als virtuelle Test-Wallbox gekennzeichnet? "
                     "Keine echten Kunden-Ladevorgänge erzeugen.\n\n"
-                    "Der Simulator erzeugt künstliche Ladevorgänge und darf "
+                    "Der Server lehnt normale Wallboxen für diesen Simulator ab. Er erzeugt künstliche Ladevorgänge und darf "
                     "NICHT mit einer Kunden- oder Produktionsstation verbunden werden.\n\n"
                     "Nur mit einer TESTSTATION verbinden?",
                 )
@@ -835,27 +858,54 @@ class SimulatorApp(tk.Tk):
             self.audit_window._refresh()
         # Tk variables may only be read from the GUI thread.
         nominal_amp = 32 if self.nominal_power_var.get().startswith("22") else 16
-        self._schedule(self._connect(url, identity, self.password_var.get(), number, nominal_amp))
+        self.manual_disconnect = False
+        # A user-selected NEW station must not inherit counters or unfinished
+        # transactions from a previously connected OCPP identity.
+        self.recovery_snapshots.clear()
+        self.last_meters.clear()
+        # Snapshot Tkinter values before entering the asyncio background thread.
+        self.connection_settings = (url, identity, self.password_var.get(), number, nominal_amp)
+        self._schedule(self._connect(*self.connection_settings))
 
     async def _connect(self, url, identity, password, count, nominal_amp):
         try:
             auth = base64.b64encode(f"{identity}:{password}".encode()).decode()
             self.socket = await websockets.connect(
                 url, subprotocols=["ocpp1.6"],
-                extra_headers={"Authorization": "Basic " + auth},
-                open_timeout=15, ping_interval=20
+                extra_headers={"Authorization": "Basic " + auth,
+                               "X-ChargeVisor-Test-Wallbox": "1"},
+                open_timeout=15, ping_interval=20, ping_timeout=30, close_timeout=10
             )
             require(self.socket.subprotocol == "ocpp1.6", "OCPP 1.6J not negotiated")
             self.ocpp_master = InteractiveMaster(identity, self.socket, count, self._notify,
                                             nominal_amp=nominal_amp)
             self.receiver = asyncio.create_task(self.ocpp_master.start())
             await self.ocpp_master.boot()
+            # Never reset the simulated energy counter after a reconnect.
+            for connector, point in self.ocpp_master.points.items():
+                if connector in self.last_meters:
+                    point["meter"] = max(point["meter"], self.last_meters[connector])
+            # An interrupted transaction belongs to the OLD OCPP socket. Do
+            # not start a new session before the backend acknowledges its stop.
+            recovered = 0
+            for connector, state in list(self.recovery_snapshots.items()):
+                await self.ocpp_master.call(call.StopTransaction(
+                    transaction_id=state["tx"], meter_stop=state["meter"],
+                    timestamp=timestamp(), reason="Other"
+                ))
+                self.recovery_snapshots.pop(connector)
+                recovered += 1
+                self._transport_diagnostic("OLD_TX_STOPPED",
+                                           f"connector={connector} tx={state['tx']}")
             for i in range(1, count + 1):
                 await self.ocpp_master.set_status(i, "Available")
                 self._notify("point", i, "Available")
             self.heartbeat_task = asyncio.create_task(self._heartbeat())
             self.monitor = asyncio.create_task(self._watch_connection())
+            if self.soak_runner and not self.soak_runner.finished and self.soak_runner.pending_recovery:
+                self.soak_runner.connection_restored(self.ocpp_master, recovered)
             self._notify("connected", True)
+            self._transport_diagnostic("CONNECTED", f"connectors={count}; reconciled_txs={recovered}")
             self._notify("log", f"Connected: {identity}, 1 socket, {count} connectors")
         except Exception as exc:
             self._notify("log", f"Verbindung fehlgeschlagen: {exc}")
@@ -872,21 +922,72 @@ class SimulatorApp(tk.Tk):
         except asyncio.CancelledError:
             pass
         except Exception as exc:
-            self._notify("log", f"Heartbeat failed: {exc}")
-            await self._disconnect()
+            self._transport_diagnostic("HEARTBEAT_FAILED", type(exc).__name__)
+            # Let the socket watcher perform snapshot/recovery once.
+            if self.socket:
+                with contextlib.suppress(Exception):
+                    await self.socket.close()
 
     async def _watch_connection(self):
+        detail = "OCPP receiver stopped"
         try:
             await self.receiver
         except asyncio.CancelledError:
-            pass
+            detail = "OCPP receiver cancelled"
         except Exception as exc:
-            self._notify("log", f"OCPP connection lost: {exc}")
+            detail = f"{type(exc).__name__}: {exc}"
         finally:
+            code = getattr(self.socket, "close_code", None)
+            reason = getattr(self.socket, "close_reason", None)
+            if not self.manual_disconnect:
+                # Preserve counters and identify transactions that must be
+                # closed on the backend before any fresh sessions are created.
+                if self.ocpp_master:
+                    for connector, point in self.ocpp_master.points.items():
+                        self.last_meters[connector] = point["meter"]
+                        if point["tx"] is not None:
+                            self.recovery_snapshots[connector] = {
+                                "tx": point["tx"], "meter": point["meter"]
+                            }
+                self._transport_diagnostic(
+                    "UNEXPECTED_DISCONNECT",
+                    f"{detail}; close_code={code}; close_reason={reason}; "
+                    f"pending_txs={len(self.recovery_snapshots)}"
+                )
+                if self.soak_runner and not self.soak_runner.finished:
+                    self.soak_runner.connection_lost(
+                        f"code={code}, pending_txs={len(self.recovery_snapshots)}"
+                    )
             await self._disconnect()
+            if not self.manual_disconnect and self.connection_settings:
+                self.reconnect_task = asyncio.create_task(self._retry_connection())
+
+    async def _retry_connection(self):
+        attempt = 0
+        while not self.manual_disconnect and self.connection_settings:
+            attempt += 1
+            delay = min(30, 2 ** min(attempt, 5))
+            self._transport_diagnostic("RECONNECT_WAIT", f"attempt={attempt}; delay={delay}s")
+            self._notify("reconnecting", attempt)
+            try:
+                await asyncio.sleep(delay)
+                if self.manual_disconnect:
+                    break
+                await self._connect(*self.connection_settings)
+                self._transport_diagnostic("RECONNECT_SUCCESS", f"attempt={attempt}")
+                return
+            except asyncio.CancelledError:
+                return
+            except Exception as exc:
+                self._transport_diagnostic("RECONNECT_ERROR",
+                                           f"attempt={attempt}; error={type(exc).__name__}")
+        self._notify("reconnecting", 0)
 
     async def _disconnect(self):
         current = asyncio.current_task()
+        if self.manual_disconnect and self.reconnect_task and self.reconnect_task != current:
+            self.reconnect_task.cancel()
+            self.reconnect_task = None
         if self.heartbeat_task and self.heartbeat_task != current:
             self.heartbeat_task.cancel()
         if self.monitor and self.monitor != current:
@@ -913,6 +1014,7 @@ class SimulatorApp(tk.Tk):
             messagebox.showwarning("Dauertest aktiv",
                 "Vor dem Trennen zuerst 'Beenden + Bericht erstellen' verwenden.")
             return
+        self.manual_disconnect = True
         self._schedule(self._disconnect())
 
     def _submit_point(self, connector, start):
@@ -942,7 +1044,10 @@ class SimulatorApp(tk.Tk):
                     self._log(message[1])
                 elif kind == "connected":
                     self.connected = bool(message[1])
-                    self.connect_button.configure(state="disabled" if self.connected else "normal")
+                    reconnecting = (not self.manual_disconnect and self.reconnect_task
+                                    and not self.reconnect_task.done())
+                    self.connect_button.configure(
+                        state="disabled" if self.connected or reconnecting else "normal")
                     self.start_soak_button.configure(state="normal" if self.connected and not (
                         self.soak_future and not self.soak_future.done()) else "disabled")
                     self.disconnect_button.configure(state="normal" if self.connected else "disabled")
@@ -955,6 +1060,14 @@ class SimulatorApp(tk.Tk):
                             state.configure(text="Offline")
                             start.configure(state="disabled")
                             stop.configure(state="disabled")
+                elif kind == "reconnecting":
+                    attempt = message[1]
+                    if attempt:
+                        self.state_label.configure(text=f"● Reconnect {attempt} ...",
+                                                   foreground="#bd831f")
+                        self.connect_button.configure(state="disabled")
+                    else:
+                        self.connect_button.configure(state="normal")
                 elif kind == "point":
                     _, connector, state, *details = message
                     if connector in self.point_widgets:
@@ -1003,7 +1116,7 @@ class SimulatorApp(tk.Tk):
                         self.last_soak_dir = Path(csv_path).parent
                     self.start_soak_button.configure(state="normal" if self.connected else "disabled")
                     self.stop_soak_button.configure(state="disabled")
-                    if csv_path and self.soak_runner and status in ("COMPLETED", "CANCELLED", "FAILED"):
+                    if csv_path and self.soak_runner and status in ("COMPLETED", "COMPLETED_WITH_INTERRUPTION", "CANCELLED", "FAILED"):
                         if not self.audit_window or not self.audit_window.winfo_exists():
                             self.audit_window = CoverageWindow(self)
                         self.audit_window.store = self.soak_runner.audit
@@ -1025,6 +1138,7 @@ class SimulatorApp(tk.Tk):
                 "Der Zweistundentest läuft noch. Verwende zuerst "
                 "'Beenden + Bericht erstellen', damit der Testlauf sauber abgeschlossen wird.")
             return
+        self.manual_disconnect = True
         self._schedule(self._disconnect())
         self.destroy()
 

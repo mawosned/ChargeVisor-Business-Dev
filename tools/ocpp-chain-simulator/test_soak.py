@@ -112,5 +112,52 @@ class SoakTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(all(p["tx"] is None for p in master.points.values()))
 
 
+    async def test_disconnect_and_reconnect_survive_but_do_not_hide_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            original = FakeMaster(3)
+            runner = SoakRunner(original, "CV-TEST-RECONNECT", "ASSIGNED1",
+                                lambda *args: None,
+                                duration_seconds=1.6, cycle_seconds=10,
+                                _test_interval_seconds=0.025, base_dir=tmp)
+            task = asyncio.create_task(runner.run())
+            await asyncio.sleep(0.10)
+            runner.connection_lost("unexpected websocket closure")
+            self.assertFalse(runner.connection_ready.is_set())
+            await asyncio.sleep(0.12)
+            replacement = FakeMaster(3)
+            runner.connection_restored(replacement, recovered_transactions=1)
+            self.assertTrue(runner.connection_ready.is_set())
+            await asyncio.wait_for(task, 6)
+            report = json.loads(runner.report_paths["json"].read_text(encoding="utf-8"))
+            self.assertEqual(report["result"], "COMPLETED_WITH_INTERRUPTION")
+            self.assertEqual(report["transport_interruptions"], 1)
+            self.assertEqual(report["transport_recoveries"], 1)
+            self.assertEqual(report["recovered_transactions"], 1)
+            self.assertGreater(report["summary"]["FAIL"], 0)
+            self.assertEqual(runner.audit.status("SCENARIO.Offline.Disconnect"), "FAIL")
+            self.assertEqual(runner.audit.status("SCENARIO.Offline.Reconnect"), "PROTOCOL_OK")
+            self.assertIs(runner.master, replacement)
+
+    async def test_unrecovered_disconnect_finishes_failed_with_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            master = FakeMaster(2)
+            runner = SoakRunner(master, "CV-TEST-OFFLINE", "ASSIGNED1",
+                                lambda *args: None,
+                                duration_seconds=1.6, cycle_seconds=10,
+                                _test_interval_seconds=0.025, base_dir=tmp)
+            job = asyncio.create_task(runner.run())
+            await asyncio.sleep(0.08)
+            runner.connection_lost("socket disconnected")
+            await asyncio.wait_for(job, 6)
+            report = json.loads(runner.report_paths["json"].read_text(encoding="utf-8"))
+            self.assertEqual(report["result"], "FAILED")
+            self.assertTrue(report["pending_recovery_at_finish"])
+            self.assertEqual(report["transport_interruptions"], 1)
+            self.assertEqual(report["transport_recoveries"], 0)
+            self.assertGreaterEqual(report["summary"]["FAIL"], 1)
+            self.assertTrue(any("Reconnect" in e["check"] for e in report["events"]))
+
+
+
 if __name__ == "__main__":
     unittest.main()
