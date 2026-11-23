@@ -16,7 +16,8 @@ Diese Datei gilt für Coding-Agenten und alle zukünftigen Codeänderungen.
 - Kunden-Admin verwaltet nur Nutzer und deren Ladepunkt-Zuordnungen im eigenen Kundenkonto.
 - Nutzer sieht nur zugewiesene Ladepunkte. Bestehende E-Mail-Adressen dürfen für zusätzliche Ladepunkte wiederverwendet werden.
 - OCPP 1.6J-WSS-Zugangsdaten werden nur geschützt bereitgestellt, Passwörter niemals im Klartext gespeichert.
-- Virtuelle OCPP-Wallboxen nur nach ausdrücklicher Markierung `is_simulator=true`, sämtliche Simulationstaten eindeutig markiert; niemals abrechnen.
+- Der **externe OCPP-Desktop-Simulator MUSS wie eine echte OCPP-1.6J-Wallbox funktionieren**: reguläre `wss://.../ocpp/{ChargePointID}`-URL, Standard-OCPP-`ocpp1.6`-Subprotokoll und dieselben vom Kundenbackend ausgegebenen Basic-Auth-Zugangsdaten. **Keine zusätzlichen simulator-only HTTP-Header, gesonderten OCPP-IDs oder `is_simulator=true`-Pflicht für seine Verbindung erzwingen.** Jede normal provisionierte Station soll emulierbar sein, sofern die OCPP-ID nicht bereits verbunden ist.
+- Das Backend-Attribut `is_simulator=true` steuert ausschließlich die **Kennzeichnung/Abgrenzung der so gespeicherten Testdaten**; es darf bei der regulären Desktop-Handshake-Implementierung keine Pflicht sein. Bei normalen Stationen entstehen auch durch den Simulator derzeit `simulated=false`-Transaktionen; diese Testergebnisse dürfen nicht versehentlich mit realer Kundenabrechnung vermischt werden.
 
 ## Vor einer Änderung
 1. Relevante Original-Dateien sowie aktuelle Version **vollständig vergleichen**. Nicht blind neu schreiben.

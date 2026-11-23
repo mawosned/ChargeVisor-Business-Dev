@@ -836,11 +836,12 @@ class SimulatorApp(tk.Tk):
                 approved = messagebox.askyesno(
                     "Externe OCPP-Verbindung",
                     "Du möchtest dich mit einem externen WSS-Server verbinden.\n\n"
-                    "Ist diese OCPP-ID im Backend ausdrücklich als virtuelle Test-Wallbox gekennzeichnet? "
-                    "Keine echten Kunden-Ladevorgänge erzeugen.\n\n"
-                    "Der Server lehnt normale Wallboxen für diesen Simulator ab. Er erzeugt künstliche Ladevorgänge und darf "
-                    "NICHT mit einer Kunden- oder Produktionsstation verbunden werden.\n\n"
-                    "Nur mit einer TESTSTATION verbinden?",
+                    "Der Simulator verbindet sich genau wie eine echte OCPP-1.6J-Wallbox "
+                    "mit der angegebenen ID und dem OCPP-Passwort.\n\n"
+                    "Achtung: Auf normalen Stationen werden die erzeugten Ladevorgänge "
+                    "auch als normale Transaktionen gespeichert. Bitte nur bei "
+                    "eigens für Tests vorgesehenen Stationen ausführen.\n\n"
+                    "Verbindung zu diesem OCPP-Server aufbauen?",
                 )
                 if not approved:
                     return
@@ -872,8 +873,7 @@ class SimulatorApp(tk.Tk):
             auth = base64.b64encode(f"{identity}:{password}".encode()).decode()
             self.socket = await websockets.connect(
                 url, subprotocols=["ocpp1.6"],
-                extra_headers={"Authorization": "Basic " + auth,
-                               "X-ChargeVisor-Test-Wallbox": "1"},
+                extra_headers={"Authorization": "Basic " + auth},
                 open_timeout=15, ping_interval=20, ping_timeout=30, close_timeout=10
             )
             require(self.socket.subprotocol == "ocpp1.6", "OCPP 1.6J not negotiated")
