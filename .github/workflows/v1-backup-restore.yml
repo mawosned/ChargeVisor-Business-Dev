@@ -42,10 +42,14 @@ jobs:
           cache: npm
       - name: Verify current frontend not altered
         run: node scripts/verify-frontend-unchanged.mjs
-      - name: Install PostgreSQL client v16 and locked Node dependencies
+      - name: Install pinned PostgreSQL 16 client and locked Node dependencies
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client-16
+          mkdir -p "$PWD/.cv-ops-bin"
+          chmod +x scripts/ops/pg-client-docker.sh
+          ln -s "$PWD/scripts/ops/pg-client-docker.sh" "$PWD/.cv-ops-bin/pg_dump"
+          ln -s "$PWD/scripts/ops/pg-client-docker.sh" "$PWD/.cv-ops-bin/pg_restore"
+          echo "$PWD/.cv-ops-bin" >> "$GITHUB_PATH"
+          export PATH="$PWD/.cv-ops-bin:$PATH"
           pg_dump --version
           pg_restore --version
           npm ci --ignore-scripts
