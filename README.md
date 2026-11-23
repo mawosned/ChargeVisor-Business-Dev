@@ -1,5 +1,16 @@
 # ChargeVisor Business – Entwicklungsstand und Sicherheitsregeln (23.11.2026)
 
+## BACKEND DRAFT – OCPP-Lumina-Diagnose / Pausen- und Finishing-Befehle (23.11.2026)
+
+**Nur vorbereitet; NICHT auf Render, keine Änderung laufender Simulator-Tests.** Separater Backend-Branch ohne Frontend-, CSS-, Bild- oder Bedienoberflächenänderung. Nutzer will nach dem 120-Minuten-Simulatortest die echte Lumina mit 16 A Konfiguration und ca. 2,8 kW tatsächlich gemessener Leistung untersuchen.
+
+Superadmin kann nach Freigabe des passenden UI-PRs an einem konkret gewählten physischen Ladepunkt per `POST /api/ocpp/composite-schedule` einmalig den **optional unterstützten** OCPP-1.6J-Befehl `GetCompositeSchedule` abfragen (300 s, Connector-ID, A), ohne Stromgrenzen, RFID, gespeicherte Profile oder Hardware zu verändern. Authentifizierung, Tenant-/Point-Validierung, Origin-Prüfung, Einzelbefehl-Sperre und Antwortvalidierung vorhanden. Meldungen in A/W werden ohne erfundene Wandlung dargestellt; `Rejected`, `NotSupported`, nicht auswertbarer Plan getrennt; **Quelle eines Ladeprofils kann daraus nicht zuverlässig abgeleitet werden**. Die reale Enelion-Kompatibilität ist NOCH NICHT bestätigt.
+
+Zur vorhandenen physischen Ladesteuerung: user-initiiertes `RemoteStartTransaction` ist auch aus `Finishing` möglich (die Wallbox kann `Rejected` melden); erneutes `SetChargingProfile` zum Pausieren ist auch bei veraltetem `remote_paused=true` möglich, wenn die Lumina tatsächlich wieder mit `Charging` meldet. **Kein automatisches Starten, Reset oder Löschen von Profilen.** Alle Änderungen isoliert getestet; keine Bedienoberfläche in diesem PR.
+
+**Kombiniertes Vorhaben:** UI-spezifischer Draft-PR auf separatem Branch ergänzt Play/Pause/Stop und die ausdrücklich auszulösende Diagnose-Schaltfläche. Beide müssen nach Testabschluss gemeinsam gegen reale Lumina und mehrteilige Simulatorkette geprüft werden. **Nicht vor Abschluss des 120-Minuten-Tests mergen/deployen.** WICHTIG: echtes Neon→SharePoint-Backup mit Restore weiter offen.
+
+
 ## FIX BESTÄTIGT / AUSGELIEFERT IM DEV – HTTP 403 bei normalem OCPP-Simulator behoben (23.11.2026)
 
 - **Öffentliches `ChargeVisor-Business-Dev/main`**, Merge-Commit `d6e3bf32778a59d1fca78d734cb95a0456dab7f6`, <https://github.com/mawosned/ChargeVisor-Business-Dev/pull/12>. **Alle sechs PR-CI-Workflows erfolgreich** (einschließlich OCPP-Desktop-Simulator-Tests und ChargeVisor-Browserregression). Der neue Regressionstest stellt sicher, dass `desktop_simulator.py` **keinen `X-ChargeVisor-Test-Wallbox`-Header** mehr an eine reguläre OCPP-Verbindung anhängt.
