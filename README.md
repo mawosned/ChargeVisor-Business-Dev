@@ -1,5 +1,16 @@
 # ChargeVisor Business – Entwicklungsstand und Sicherheitsregeln (23.11.2026)
 
+## FRONTEND DRAFT – stabile Ladebuttons und geschützte Lumina-Optik (23.11.2026)
+
+**Nur vorbereitet; NICHT auf Render, kein neues Deployment, noch kein Wechsel in `main`.** Separater vom Backend abgetrennter Frontend-PR, ausdrücklich für die Nutzeranforderung vom 23.11.2026: **beim Laden ausschließlich Pause; nach wirksamer Remote-Pause Play + Stop; bei angeschlossenem Fahrzeug Play, sofern ein user-initiiertes OCPP-Startsignal möglich ist.** Fehlerquelle: vorherige UI zeigte `Pause+Stop` während `Charging`, behandelte `Finishing` als „Verbunden“ ohne Start und bei `remote_paused=true` trotz `Charging` nur Stop. Neue einzelne Zustandsmatrix vergleicht je Connector tatsächlichen OCPP-Status mit aktiver nicht simulierter Transaktion sowie CSMS-Pause: `Charging` + aktive TX -> nur Pause, bestätigte Remote-Pause mit `SuspendedEV(SE)` -> Play+Stop, `Preparing`/`SuspendedEV(SE)`/`Finishing` ohne TX -> Play, `Available`/offline kein Start. In widersprüchlichen Zuständen wird kein Erfolg erfunden.
+
+In den **bestehenden aufgeklappten Details** erscheint ausschließlich für den Superadmin und physische Ladepunkte die unaufdringliche Aktion **„OCPP-Ladeprofil prüfen“**. Sie sendet erst **nach explizitem Klick** eine Anfrage an den eng begrenzten read-only Backend-Endpunkt, der im **separaten Backend-Draft-PR** vorbereitet ist; ohne diesen Backend-PR ist die Funktion noch NICHT betriebsbereit. Kein automatisches Abfragen, keine grafische Neuordnung.
+
+**Design-Sicherung:** Es wurde **nur `app-live.js`** angepasst, keine der weiteren 13 eingefrorenen Frontend-Dateien/Assets. Der bestehende UI-Regressionswächter `scripts/verify-frontend-unchanged.mjs` autorisiert in diesem ausdrücklich UI-spezifischen Draft-PR **nur den exakten neuen Blob-Hash von `app-live.js`**, alle übrigen 13 Vorgaben und Lumina-Grafik/LEDs bleiben unverändert. Eigene Regressionstests prüfen alle Buttons, unvollständige Transaktionen, Stale-Pause und manuelle Diagnose. Nach Testende beide PRs zusammen abnehmen; Hardware-`Finishing`-RemoteStart und optionale Composite-Diagnose noch LIVE prüfen.
+
+**Freigabegrenze:** Der laufende Simulator-Dauertest bleibt unangetastet. Keine Änderungen an Render, privatem Repo, Neon, realer Lumina, Enelion-Settings, DLB oder RFID. **WICHTIG:** verschlüsseltes Neon→SharePoint-Backup mit Restore bleibt gesondert offen.
+
+
 ## FIX BESTÄTIGT / AUSGELIEFERT IM DEV – HTTP 403 bei normalem OCPP-Simulator behoben (23.11.2026)
 
 - **Öffentliches `ChargeVisor-Business-Dev/main`**, Merge-Commit `d6e3bf32778a59d1fca78d734cb95a0456dab7f6`, <https://github.com/mawosned/ChargeVisor-Business-Dev/pull/12>. **Alle sechs PR-CI-Workflows erfolgreich** (einschließlich OCPP-Desktop-Simulator-Tests und ChargeVisor-Browserregression). Der neue Regressionstest stellt sicher, dass `desktop_simulator.py` **keinen `X-ChargeVisor-Test-Wallbox`-Header** mehr an eine reguläre OCPP-Verbindung anhängt.
