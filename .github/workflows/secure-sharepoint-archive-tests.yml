@@ -1,0 +1,37 @@
+name: Secure SharePoint archive and CSV unit tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/ops/**'
+      - '.github/workflows/secure-sharepoint-archive-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install locked application dependencies only
+        run: npm ci --ignore-scripts
+      - name: Confirm existing frontend remains unchanged
+        run: node scripts/verify-frontend-unchanged.mjs
+      - name: Unit-test encrypted real-session snapshots and CSV safety
+        run: node --test scripts/ops/csv-session-format.test.mjs scripts/ops/session-snapshot.test.mjs scripts/ops/decrypt-session-snapshot.test.mjs
+      - name: Check PostgreSQL 18 dump wrapper shell syntax
+        run: bash -n scripts/ops/pg18-dump.sh
+      - name: Mock-test Microsoft Graph uploader without tenant access
+        run: python -m unittest discover -s scripts/ops -p 'test_sharepoint_uploader.py' -v
+      - name: Confirm no live secrets or customer DB are required
+        run: echo 'All new tests used synthetic data. No production services contacted.'
