@@ -12,7 +12,7 @@
 
 ## Maßgebliche Dokumente – nach jedem Arbeitsblock aktualisieren
 
-- [Aktuelle Backup-, Microsoft-365-, Kosten- und Render-Freigabeentscheidung](docs/backup-operations-decision-2026-11-23.md) – **zuerst lesen**, insbesondere bei Weiterentwicklung von Backup oder Deployment
+- [Neue verschlüsselte Cloud-Backup- und Session-CSV-Implementierung (noch NICHT produktiv aktiviert)](docs/secure-sharepoint-archive-runbook.md) – verschlüsselter DB-Dump, 2×/Woche CSV, Microsoft Graph Upload und Tests\n- [Aktuelle Backup-, Microsoft-365-, Kosten- und Render-Freigabeentscheidung](docs/backup-operations-decision-2026-11-23.md) – **zuerst lesen**, insbesondere bei Weiterentwicklung von Backup oder Deployment
 - [V1 Funktionsliste und offene Abnahmen](docs/v1-feature-implementation-and-gaps.md) – Code, CI und Hardware-Pilot strikt unterscheiden
 - [Betriebs-, Backup-, Monitoring- und Restore-Runbook](docs/v1-production-readiness-runbook.md) – bereits getestete Wiederherstellungslogik; Produktivaktivierung offen
 - [Verbindliche Entwicklungsregeln](AGENTS.md) – keine Funktionen entfernen, Tests/Freigaben vor Übernahme
