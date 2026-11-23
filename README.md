@@ -1,5 +1,19 @@
 # ChargeVisor Business – Entwicklungsstand und Sicherheitsregeln (23.11.2026)
 
+## Klarstellung des Testbetriebs – 23.11.2026 (Vorrang vor früheren Produktiv-Warnungen)
+
+**Ausdrückliche Nutzerkorrektur:** Wir befinden uns mit ChargeVisor **weiterhin ausschließlich in Entwicklung und Tests**. Die reale, bereits erfolgreich ladende **Enelion Lumina ist die persönliche Testwallbox des Nutzers**; **alle bisher angelegten Kunden, Standorte, Ladevorgänge, Nutzer und Daten sind Testdaten**, keine aktiv zahlenden WEG-Kunden. Das physisch echte Gerät bleibt natürlich ein echtes OCPP-Gerät, kein Simulator.
+
+**Daraus folgt für die nächsten Schritte:** Das frühere „erst produktives Backup-/Restore-SLA, dann überhaupt neuer Render-Deploy“ war für diese **Testphase zu restriktiv**. **Aktuelle Dev-Version nach CI, kurzem Kompatibilitätscheck und festgehaltenem Rückfallstand kontrolliert auf Render Starter testen**, dabei bewusst mit temporärem Verbindungsabbruch der privaten Lumina rechnen. Ein voll abgenommener externer Produktiv-Backup-/Restore-Prozess ist **kein zwingendes Gate für den Testdeploy**, aber eine funktionierende Sicherung soll **parallel so bald wie möglich** eingeführt und getestet werden. Insbesondere ein einfacher Test-Snapshot vor dem Update ist sinnvoll; keine echten Zugangsdaten oder unverschlüsselten Archive ins öffentliche GitHub stellen.
+
+**Reihenfolge mit wenig Bürokratie:** (1) Existierenden Render-Stand und neue Dev-V1 vergleichen; sechs grüne Kern-CIs bestätigen. (2) Falls praktikabel **einen aktuellen verschlüsselten Testdaten-Snapshot** anlegen und Rückfall-Commit notieren, ohne tagelange Abnahmeprozesse. (3) Neuer Stand über privaten kontrollierten Release/Render deployen; bestehenden funktionierenden Code und UI bewahren. (4) Windows-/Mobility-House-Simulatoren und echte private Lumina mit getrennten OCPP-IDs parallel testen, Start/Stop, Status, Reconnect, Transaktionen und Reports überprüfen. (5) Automatisches Neon→Microsoft 365 SharePoint-Backup funktionstüchtig machen und realen Restore üben; **separate nächste Funktion, kein Blocker für das reine Testen**.
+
+**Wichtige technische Tatsachen bleiben:** GitHub Actions im privaten Repository war wegen **GitHub Billing** blockiert, **nicht** wegen Render Free. Der 7-USD-Render-Starter löst diese Sperre nicht. Der bisherige private Backup-Workflow lädt den Dump **unverschlüsselt** hoch; im Dev-Repo liegt bereits ein separater verschlüsselter AES-256-GCM-Upload-Prototyp mit simulierten/automatisierten Tests. Vor produktivem Kundenbetrieb später eine echte Sicherheits- und Betriebsabnahme durchführen; im heutigen Testbetrieb Fortschritt nicht unnötig aufhalten.
+
+**GitHub-Repositories:** `ChargeVisor-Business-Dev` öffentlich = neueste Entwicklung/CI; `ChargeVisor-Business` privat = bestehender Render-Service, Auto-Deploy auf `main`. Der Nutzer sagt ausdrücklich, dass ihm für den **Teststatus** die formale Einteilung öffentlich/privat nicht wichtig ist. Dennoch dürfen **keine Secrets, echte personenbezogene Daten oder Dumps** in ein öffentliches Repo gelangen; das private Render-Repo bleibt zum kontrollierten Deployment relevant. Neon bleibt Free. Render Starter ist bereits bezahlt/aktiviert. **Keine zusätzlichen Kosten ohne Freigabe.**
+
+
+
 ## Release- und Backup-Prüfung vor dem nächsten Render-Deployment (23.11.2026, nach Starter-Upgrade)
 
 **Benutzerwunsch:** Den aktuellen öffentlichen Dev-V1-Stand möglichst bald auf den bereits bezahlten Render-Starter-Service übernehmen, danach systematisch reale Enelion-Lumina und zusätzliche lokale OCPP-Simulatoren testen. **Bestätigtes Ziel, aber kein stillschweigender Direkt-Merge ohne Sicherung/Abnahme.**
