@@ -198,3 +198,42 @@ werden vor Release grundsätzlich separat behandelt.
 **Anforderung:** Nicht „fertig“ melden, solange eine dieser zwingenden
 Abnahmen offen ist. Alles CI-getestete wird als **automatisiert geprüft**,
 nicht als vollständige Hardware-/Produktionsabnahme bezeichnet.
+
+
+### OCPP-Stationsmonitor: einmalige Secret-Konfiguration bei Produktivfreigabe
+
+Neben der Web-App-Erreichbarkeit prüft der Watchdog die echte Verbindung
+**physischer** Stationen. Der neue Maschinenendpunkt
+GET /api/ops/health ist **standardmäßig deaktiviert** und antwortet 404,
+bis CV_OPS_MONITOR_TOKEN_SHA256 als 64-stelliger SHA-256-Hash eines
+zufälligen privaten Tokens in der Backend-Umgebung gesetzt ist.
+
+Für den echten Produktionsbetrieb ist einmalig einzurichten:
+
+- Backend (private Laufzeitkonfiguration):
+  CV_OPS_MONITOR_TOKEN_SHA256 = SHA256 des Monitortokens;
+  CV_OPS_EXPECT_STATIONS = Anzahl der erwarteten physischen OCPP-Verbindungen.
+- GitHub-Actions-Secret des öffentlichen Development-Repos:
+  CV_OPS_MONITOR_TOKEN = derselbe unverschlüsselte lange, zufällige Token.
+  **Niemals** im Quelltext, Query-String oder Log speichern.
+- Repository-Variablen:
+  CV_MONITOR_ENABLED = 1 und
+  CV_MONITOR_TARGET_URL = https://<echte-domain>/health.
+
+Der externe Prüfer fragt /health sowie /api/ops/health ab.
+Beide müssen gesund sein. "Demo" zählt nicht, eine fehlende Station,
+ein veralteter Heartbeat oder eine getrennte Wallbox ebenfalls nicht.
+Für die Details meldet sich der Walectra-Superadmin an und nutzt
+GET /api/ocpp/ops-summary. Die öffentlich an GitHub gemeldeten
+Störungstickets enthalten **keine** Kunden- oder Ladepunktidentität.
+
+Der Schutz lässt sich unmittelbar widerrufen, indem das Backend-
+Tokenhash entfernt wird. Ein solcher Widerruf löst zurecht einen
+Monitorfehler aus, bis die Konfiguration aktualisiert wurde.
+
+**Nicht behaupten, die Überwachung laufe bereits:** Solange keine
+geeignete Produktionsinstanz und keine einmalig freigegebenen
+Secret-/Alarm-Einstellungen existieren, bleibt die externe
+Überwachung deaktiviert. Auch erfolgreich konfigurierte GitHub-
+Scheduled-Actions ersetzen keine rund um die Uhr garantierte
+Monitoring-/Alarmierungsplattform.
