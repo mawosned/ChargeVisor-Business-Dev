@@ -859,6 +859,10 @@ class SimulatorApp(tk.Tk):
         # Tk variables may only be read from the GUI thread.
         nominal_amp = 32 if self.nominal_power_var.get().startswith("22") else 16
         self.manual_disconnect = False
+        # A user-selected NEW station must not inherit counters or unfinished
+        # transactions from a previously connected OCPP identity.
+        self.recovery_snapshots.clear()
+        self.last_meters.clear()
         # Snapshot Tkinter values before entering the asyncio background thread.
         self.connection_settings = (url, identity, self.password_var.get(), number, nominal_amp)
         self._schedule(self._connect(*self.connection_settings))
