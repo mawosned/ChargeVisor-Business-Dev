@@ -298,8 +298,11 @@ try{
 
   // Power-outage acceptance: abrupt TCP loss (no graceful WebSocket close).
   // ChargeVisor MUST NOT fabricate a StopTransaction or a billable value.
-  const crashStart={connectorId:1,idTag:card,meterStart:4000,timestamp:new Date().toISOString()};
-  assert.equal((await call(resumed,'Authorize',{idTag:card}))[2].idTagInfo.status,'Accepted');
+  // The original physical card was deliberately disabled earlier in this
+  // regression. Use the separately enrolled, still active all-points card.
+  const recoveryCard='4AE6CA91';
+  const crashStart={connectorId:1,idTag:recoveryCard,meterStart:4000,timestamp:new Date().toISOString()};
+  assert.equal((await call(resumed,'Authorize',{idTag:recoveryCard}))[2].idTagInfo.status,'Accepted');
   const crashedTx=(await call(resumed,'StartTransaction',crashStart))[2].transactionId;
   assert.ok(crashedTx>0,'Physical transaction missing before simulated power loss');
   const killed=once(resumed,'close');
