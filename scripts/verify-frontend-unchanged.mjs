@@ -2,7 +2,9 @@
  * ChargeVisor Business V1 UI freeze.
  * User-approved baseline: public dev main 4f122a6d41338c017848b8270e3b769817366766.
  * Explicit UI-specific change requested 23 Nov 2026: Play/Pause/Stop state logic
- * and manual read-only diagnostics trigger in app-live.js ONLY. The other 13
+ * and manual read-only diagnostics trigger in app-live.js ONLY.
+ * 23 Nov 2026, UI-specific stability repair: 12-second OCPP polling now patches
+ * only changed DOM values instead of reloading the Lumina/chart/customer view. The other 13
  * exact visual/HTML/CSS/logo/export fingerprints remain frozen below.
  * No design, CSS, HTML, JS application logic, branding or existing export changes
  * may silently enter backend/OCPP pull requests.
@@ -21,7 +23,7 @@ import {dirname,resolve} from 'node:path';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const baseline='4f122a6d41338c017848b8270e3b769817366766';
 const files=Object.freeze({
-  'app-live.js':'f14cbeb4cc734aa72fd18183f1cbb2286436154e',
+  'app-live.js':'59bc2fc036165d3b0a55b83c6049dbd0fb2f4fbd',
   'app.html':'fbfac4c3427459aa64e4613cac02cc935b6eefc4',
   'app.js':'72eb69d35fb9b24e60a019bf098dc9c95fbb7aba',
   'index.html':'0415537962bbe745eb4edb864dc0632ba8d93cbd',
