@@ -1,5 +1,29 @@
 # ChargeVisor Business – Entwicklungsstand und Sicherheitsregeln (23.11.2026)
 
+## Release- und Backup-Prüfung vor dem nächsten Render-Deployment (23.11.2026, nach Starter-Upgrade)
+
+**Benutzerwunsch:** Den aktuellen öffentlichen Dev-V1-Stand möglichst bald auf den bereits bezahlten Render-Starter-Service übernehmen, danach systematisch reale Enelion-Lumina und zusätzliche lokale OCPP-Simulatoren testen. **Bestätigtes Ziel, aber kein stillschweigender Direkt-Merge ohne Sicherung/Abnahme.**
+
+**Direkt geprüfter Stand:**
+- Render `chargevisor-business-demo` (Frankfurt) ist **Starter 0,5 CPU/512 MB**, `live`; Quelle weiterhin **privates** `mawosned/ChargeVisor-Business/main`, Commit `0711389a00ccebc359ac53158602376b82f4255c`, Auto-Deploy bei Änderungen auf privatem `main`.
+- Die neueste öffentliche Dev-Version `mawosned/ChargeVisor-Business-Dev/main`, zuletzt geprüfter Commit `4e7550b9bc70c2687a90be9da2fc3aa7f242ed75`, hatte **sechs erfolgreiche CI-Workflows** auf genau diesem Commit. Dazu gehören Simulator-/OCPP-/WEG-/Backend- und **isolierte** Testdaten-Backup-/Restore-Tests. Nicht mit produktivem Backup oder Live-Hardwareabnahme verwechseln.
+- Die zentrale Datei `backend/schema.sql` ist nach Blob-SHA identisch in Dev und privat. Geprüfte Frontend-Dateien `app-live.js`, `app.html`, `app.js`, `index.html`, `login.html`, `login.js`, `styles.css`, `portal-language.js`, `exports.js` stimmen ebenfalls überein. Die übrigen fünf Assets muss die existierende Release-Automatik weiterhin vollständig auf identische Git-Hashes prüfen.
+- Neon `chargevisor-business` (PG18, Free) enthält bereits reale/angelegte Stationen, OCPP-Protokolle und Ladevorgänge. Kein leerer Demo-Datensatz. Datenbank nicht löschen/zurücksetzen; bei Render-Neustart können WebSocket-Verbindungen kurz abreißen.
+- Die bestehende Microsoft-365-SharePoint-Site `ChargeVisorBackups` und der Ordner `Database-Backups` sind abrufbar; **Ordner weiterhin leer**. Ein erfolgreiches Produktiv-Backup ist **nicht** nachgewiesen. Die bisherigen privaten GitHub-Actions-Tests sind weiter vor Ausführung blockiert (`Usage blocked` / Billing), **nicht** durch Render Free. Das Upgrade auf Render Starter repariert GitHub-Actions-Abrechnung **nicht**.
+- **Besonders wichtig:** `mawosned/ChargeVisor-Business/.github/workflows/neon-sharepoint-backup.yml` verwendet derzeit `pg_dump` und `scripts/neon_sharepoint_backup.py` ohne Verschlüsselung **vor** dem SharePoint-Upload. Diesen Workflow **nicht** mit Kundendaten aktivieren, bevor ein verschlüsseltes Verfahren freigegeben/integriert ist. Die sichere AES-256-GCM-Lösung inklusive SharePoint-Uploader liegt bereits im Dev-Repo unter `scripts/ops/`; ihre Offline-CI ist erfolgreich, ein realer App-only-Upload und Restore stehen noch aus.
+- Der echte Enelion-Lumina-Ladepunkt `Lumina Garage / Stellplatz 1` wurde nach Nutzerangabe bereits erfolgreich real betrieben. Keine Änderung an dessen OCPP-ID, Passwort, Zuordnung, RFID oder Live-Umgebung durch einen Simulator.
+- **Simulatorstart auf Windows bestätigt:** Das rekursive Suchen und Starten einer einzigen `START-SIMULATOR.cmd` hat die funktionierende GUI wieder geöffnet. Der zuvor versuchte Updater-Austausch ist fehlgeschlagen; keine aktualisierte lokale Version behaupten. Nur eigene, nicht abrechnende Teststation mit OCPP-ID verwenden. Zuerst 5-Minuten-Test und lokale Berichte, dann längere Laufzeit und Geräte-Reconnect.
+
+**Sichere, priorisierte Fortsetzung:**
+1. Unabhängiges echtes **verschlüsseltes Neon-18-Vollbackup nach SharePoint** etablieren, verschlüsselte Datei wieder herunterladen und in isolierter Testdatenbank tatsächlich restaurieren. Backup-Key sicher und getrennt verwahren; kein Kundendump im öffentlichen Repository. GitHub-Actions-Billing im privaten Repo oder alternativ genehmigten zuverlässigen Scheduler lösen. Bestehenden **unverschlüsselten** Workflow nicht starten.
+2. Parallel auf dem **bestehenden privaten Render-Starter-Code** die bereits funktionierende lokale Simulator-GUI mit **getrennter Teststation** verbinden und OCPP Boot/Heartbeat/RFID/Start/Meter/Stop/Reconnect + 5-Minuten-Bericht prüfen. Echte Lumina beobachten, nicht als Teststation benutzen.
+3. Sobald Backup/Restore funktioniert: `scripts/ops/prepare-private-release.ps1` aus dem Dev-Repo als **Draft-Release-PR** verwenden. Er prüft alle sechs CI-Läufe, 14 Frontend-Dateien und legt einen privaten Backup-Branch an. Nicht automatisch in privaten `main` mergen. Insbesondere den alten Backup-Workflow im privaten Repo vor dem Release separat auf sichere Verschlüsselung überprüfen/ersetzen.
+4. Neues Backend erst nach konkreter Freigabe in einem vereinbarten Zeitfenster auf den privaten Render-Service deployen; währenddessen darf keine reale Ladung unbeaufsichtigt laufen. Danach Reconnect der Lumina, sämtliche Standorte, Transaktionen, Rollen, RFID und CSV/PDF-Auswertungen prüfen. Bei Problemen über vorbereiteten Application-Rollback zurückgehen, **ohne** die Kundendatenbank zurückzusetzen.
+
+**Was bisher NICHT getan wurde:** kein aktueller Dev-Code nach Render deployed, kein produktives Backup, kein Restore mit realem Neon-18-Dump, kein 5-Minuten-Livetest des lokalen Simulators von hier aus, keine kostenpflichtigen Änderungen. Alle Aussagen zu erfolgreichen Tests beziehen sich auf tatsächlich grüne CI mit isolierten Testdaten.
+
+
+
 ## Render Starter – tatsächlich aktiviert und geprüft (23.11.2026, ca. 16:00 Uhr MEZ)
 
 **VERIFIZIERTER IST-STAND (Render-Service-API und Deploy-Historie, nicht nur Nutzerangabe):**
