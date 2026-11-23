@@ -69,7 +69,7 @@ jobs:
         run: |
           TENANT="$(node -p 'require("node:crypto").randomUUID()')"
           TOKEN="$(node -p 'require("node:crypto").randomBytes(48).toString("base64url")')"
-          HASH="$(node -e 'process.stdout.write(require("node:crypto").createHash("sha256").update(process.argv[1]).digest("hex"))' "$TOKEN")"
+          HASH="$(node -e 'process.stdout.write(require("node:crypto").createHash("sha256").update(process.argv[1]).digest("hex"))' -- "$TOKEN")"
           echo "::add-mask::$TOKEN"
           echo "CV_OCPP_VERIFIER_TENANT_ID=$TENANT" >> "$GITHUB_ENV"
           echo "CV_OCPP_VERIFIER_SHA256=$HASH" >> "$GITHUB_ENV"
