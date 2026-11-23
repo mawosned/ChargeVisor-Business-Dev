@@ -42,12 +42,47 @@ export async function probeWithRetries(url,{fetcher=globalThis.fetch,
   }
   return {...result,attempts};
 }
+export async function probeStationHealth(url,token,{fetcher=globalThis.fetch,timeoutMs=30_000}={}){
+  const healthUrl=validateMonitorUrl(url);
+  if(!/^[a-zA-Z0-9_-]{40,200}$/.test(token||''))
+    return {healthy:false,reason:'OPS_MONITOR_TOKEN_MISSING'};
+  const endpoint=new URL('/api/ops/health',healthUrl).toString();
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),timeoutMs);
+  try{
+    const response=await fetcher(endpoint,{method:'GET',
+      signal:controller.signal,redirect:'error',cache:'no-store',
+      headers:{Authorization:'Bearer '+token,Accept:'application/json'}});
+    if(response.status!==200)return {healthy:false,reason:'STATIONS_HTTP_'+response.status};
+    const body=await response.json();
+    if(body?.status!=='ok'||!body.stationCounts||
+       !Number.isInteger(body.stationCounts.scanned)||
+       !Number.isInteger(body.stationCounts.online)||
+       body.stationCounts.stale!==0||body.stationCounts.disconnected!==0)
+      return {healthy:false,reason:'STATIONS_DEGRADED'};
+    return {healthy:true,reason:'STATIONS_OK'};
+  }catch(e){
+    return {healthy:false,reason:e.name==='AbortError'?'STATIONS_TIMEOUT':'STATIONS_NETWORK_ERROR'};
+  }finally{clearTimeout(timeout);}
+}
 async function main(){
   const url=process.env.CV_MONITOR_TARGET_URL||'';
   const result=await probeWithRetries(url);
-  console.log(JSON.stringify({time:new Date().toISOString(),status:result.healthy?'PASS':'FAIL',
-    attempts:result.attempts,reason:result.reason}));
-  if(!result.healthy)process.exitCode=1;
+  let stations={healthy:true,reason:'STATIONS_NOT_CONFIGURED'};
+  if(process.env.CV_MONITOR_REQUIRE_OPS==='1'){
+    stations=await probeStationHealth(url,process.env.CV_MONITOR_TOKEN||'');
+    if(!stations.healthy){
+      // Short transient retries for station monitoring, without changing data.
+      for(let n=0;n<2&&!stations.healthy;n++){
+        await new Promise(resolve=>setTimeout(resolve,10_000));
+        stations=await probeStationHealth(url,process.env.CV_MONITOR_TOKEN||'');
+      }
+    }
+  }
+  const healthy=result.healthy&&stations.healthy;
+  console.log(JSON.stringify({time:new Date().toISOString(),status:healthy?'PASS':'FAIL',
+    attempts:result.attempts,reason:!result.healthy?result.reason:stations.reason}));
+  if(!healthy)process.exitCode=1;
 }
 if(process.argv[1]&&fileURLToPath(import.meta.url)===resolve(process.argv[1])){
   main().catch(e=>{console.error('Monitor configuration failure:',e.message);process.exitCode=1;});
