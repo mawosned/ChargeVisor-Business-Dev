@@ -278,6 +278,63 @@
   return true;
 }
 
+  // Preserve DOM identity during the 12-second OCPP polling cycle:
+  // persistent Lumina images, animated LEDs, inputs and chart paths must not
+  // be destroyed and recreated just because a new heartbeat was received.
+  const liveKey=n=>n?.nodeType===1?(
+    n.id?'id:'+n.id:n.getAttribute('data-live-site')?'site:'+n.getAttribute('data-live-site'):
+    n.getAttribute('data-live-station')?'station:'+n.getAttribute('data-live-station'):
+    n.getAttribute('data-live-point')?'point:'+n.getAttribute('data-live-point'):null):null;
+  const liveCompatible=(a,b)=>a?.nodeType===b?.nodeType&&
+    (a.nodeType!==1||(a.tagName===b.tagName&&a.namespaceURI===b.namespaceURI));
+  function syncLiveNodes(target,fresh){
+    let cursor=target.firstChild;
+    for(const wanted of [...fresh.childNodes]){
+      const key=liveKey(wanted);
+      let old=cursor;
+      if(key&&liveKey(old)!==key)old=[...target.childNodes].find(n=>liveKey(n)===key)||null;
+      else if(!key&&liveKey(old))old=null;
+      if(old&&liveCompatible(old,wanted)){
+        if(old!==cursor)target.insertBefore(old,cursor);
+        if(old.nodeType===3||old.nodeType===8){
+          if(old.nodeValue!==wanted.nodeValue)old.nodeValue=wanted.nodeValue;
+        }else if(old.nodeType===1){
+          for(const a of [...old.attributes])if(!wanted.hasAttribute(a.name))old.removeAttribute(a.name);
+          for(const a of [...wanted.attributes])
+            if(old.getAttribute(a.name)!==a.value)old.setAttribute(a.name,a.value);
+          syncLiveNodes(old,wanted);
+        }
+        cursor=old.nextSibling;
+      }else{
+        const inserted=wanted.cloneNode(true);
+        target.insertBefore(inserted,cursor);
+        cursor=inserted.nextSibling;
+      }
+    }
+    while(cursor){const next=cursor.nextSibling;cursor.remove();cursor=next;}
+  }
+  function syncLiveMarkup(target,html){
+    const template=document.createElement('template');
+    template.innerHTML=html;
+    syncLiveNodes(target,template.content);
+  }
+  function renderLiveOnly(){
+    const content=$('content');
+    if(!content)return;
+    const template=document.createElement('template');
+    template.innerHTML=state.page==='overview'?dashboard():sitesPage();
+    // Dashboard HTML includes placeholders for its async report; retain the
+    // populated SVG and recent-session table while live values are reconciled.
+    if(state.page==='overview'){
+      for(const id of ['analyticsChart','analyticsSessions']){
+        const previous=$(id),next=template.content.querySelector('#'+id);
+        if(previous&&next)next.innerHTML=previous.innerHTML;
+      }
+    }
+    syncLiveNodes(content,template.content);
+    if(state.page==='overview'){void loadOverview();syncOverviewNavigation();}
+  }
+
   function render(){
   renderNav();
   const titles={overview:'Übersicht',customers:'Kundenverwaltung',sites:'Standorte & Ladepunkte',sessions:'Ladevorgänge',people:'RFID','user-management':state.role==='super'?'Kundenverwaltung / Nutzerverwaltung':'Nutzerverwaltung',settings:'Einstellungen'};
@@ -367,16 +424,16 @@
       const report=await api('/api/ocpp/analytics?'+query);
       if(!chart.isConnected)return;
       const buckets=report.buckets||[];
-      chart.innerHTML=renderTimeChart(power?report.power||[]:buckets,{power,period});
+      syncLiveMarkup(chart,renderTimeChart(power?report.power||[]:buckets,{power,period}));
       if(!power){
         const values=buckets.filter(row=>row.kwh!=null);
         const total=values.length?num(values.reduce((n,row)=>n+Number(row.kwh),0))+' kWh':'–';
         $('analyticsTotal').textContent=total;
       }
       const rows=(report.sessions||[]).map(sessionRow);
-      recent.innerHTML=rows.length?'<div class="table-wrap"><table class="data-table"><thead><tr><th>Beginn</th><th>Ladepunkt</th><th>Nutzer</th><th>Energie</th><th>Status</th></tr></thead><tbody>'+
+      syncLiveMarkup(recent,rows.length?'<div class="table-wrap"><table class="data-table"><thead><tr><th>Beginn</th><th>Ladepunkt</th><th>Nutzer</th><th>Energie</th><th>Status</th></tr></thead><tbody>'+
         rows.map(row=>'<tr>'+[row.start,row.point,row.user||'–',row.kwh===null?'–':num(row.kwh)+' kWh',row.status].map(x=>'<td>'+esc(x)+'</td>').join('')+'</tr>').join('')+
-        '</tbody></table></div>':'<p class="inline-help">Noch keine Ladevorgänge.</p>';
+        '</tbody></table></div>':'<p class="inline-help">Noch keine Ladevorgänge.</p>');
     }catch(err){if(chart.isConnected)chart.textContent=err.message;}
   }
 
@@ -615,7 +672,7 @@
     const sitePower=powerSummary(these);
     const currentPower=sitePower.kw===null?'Leistung nicht gemeldet':(sitePower.partial?'Gemessen ':'Aktuell ')+kw(sitePower.kw);
     const errorCount=these.filter(p=>deviceStatus(p)==='Fehler').length;
-    html+='<section class="site-section"><button class="site-head" data-open-site="'+esc(site.id)+'" aria-expanded="'+open+'"><span class="site-visual">▦</span><span class="site-name"><strong>'+esc(site.name)+'</strong><small>'+esc(site.address)+'</small></span><span class="site-numbers">'+
+    html+='<section class="site-section" data-live-site="'+esc(site.id)+'"><button class="site-head" data-open-site="'+esc(site.id)+'" aria-expanded="'+open+'"><span class="site-visual">▦</span><span class="site-name"><strong>'+esc(site.name)+'</strong><small>'+esc(site.address)+'</small></span><span class="site-numbers">'+
       countLabel(these.length,'Ladepunkt','Ladepunkte')+'<small>'+countLabel(groups.size,'Ladestation','Ladestationen')+' · '+esc(currentPower)+' · '+onlineCount+' bereit/lädt'+(errorCount?' · '+errorCount+' Fehler':'')+'</small></span><span class="site-arrow">'+(open?'⌃':'⌄')+'</span></button>';
     if(open){
       html+='<div class="site-details">'+(state.role==='super'?'<div class="cv-site-actions"><button class="btn ghost small" data-edit-site="'+esc(site.id)+'">Standort & Adresse bearbeiten</button></div>':'');
@@ -624,7 +681,7 @@
         const shared=station?.topology==='shared';
         if(shared)list.sort((a,b)=>a.connectorNumber-b.connectorNumber);
         const stationPower=powerSummary(list);
-        html+='<div class="station-group"><div class="station-group-title cv-station-heading">'+
+        html+='<div class="station-group" data-live-station="'+esc(station?.id||list[0].id)+'"><div class="station-group-title cv-station-heading">'+
           '<div class="station-group-copy"><strong>'+esc(station?.name||'Ladestation')+'</strong><small>'+
           (station?.name?'Ladestation · ':'')+countLabel(list.length,'Ladepunkt','Ladepunkte')+'</small></div>'+
           '<span class="cv-station-power">'+(stationPower.partial?'Gemessen: ':'Total aktuell: ')+
@@ -643,7 +700,7 @@
           const liveLabel=live?.simulated?' · TESTSIMULATOR':'';
           const connector=Number(p.connectorNumber||1),power=measuredPower(p);
           const connectorLabel='#'+connector+(shared?(connector===1?' · Master':' · Slave'):'');
-          html+='<div class="point-group '+(p.disabled?'point-disabled':'')+'"><div class="point-row">'+
+          html+='<div class="point-group '+(p.disabled?'point-disabled':'')+'" data-live-point="'+esc(p.id)+'"><div class="point-row">'+
             '<div class="point-name">'+luminaPreview(display,true)+'<span><strong>'+esc(p.location)+'</strong></span></div>'+
             '<div class="point-current"><span class="cv-point-controls">'+pointControls(p,status)+'</span><span class="cv-point-status">'+
             statusIcon(status)+'<strong>'+esc(status)+esc(liveLabel)+'</strong></span>'+
@@ -1927,11 +1984,12 @@
     const tid=state.tenant;
     const view=preview;
     const r=await api('/api/ocpp/live?tenantId='+encodeURIComponent(tid));
-    if(changingView||state.tenant!==tid||preview!==view||$('modalHost').innerHTML)return;
+    if(changingView||state.tenant!==tid||preview!==view||$('modalHost').innerHTML||
+       !['sites','overview'].includes(state.page)||document.activeElement?.id==='searchInput')return;
     db.ocpp=(r.live||[]).filter(x=>testTools()||!x.simulated);
     db.ocppConnectors=(r.connectors||[]).filter(x=>testTools()||!x.simulated);
     db.transactions=r.transactions||[];
-    render();
+    renderLiveOnly();
   }
   async function init(){
   try{

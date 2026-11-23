@@ -457,3 +457,64 @@ test('Reference layout renders actual states and retains the pause, resume and c
   await expect(page.locator('#sessionMonth')).toHaveValue('2026-11');
   if(review)await page.screenshot({path:review+'/ladevorgaenge.png'});
 });
+
+test('Live polling keeps existing Lumina, customer selector and chart DOM while updating status',async({page})=>{
+  await page.addInitScript(()=>{
+    const interval=window.setInterval.bind(window);
+    window.setInterval=(callback,ms,...args)=>{
+      if(ms===12000){window.__cvTestLiveTick=callback;return 123456;}
+      return interval(callback,ms,...args);
+    };
+  });
+  await mockBackend(page);
+  let cp1Status='Charging';
+  await page.route('**/api/ocpp/live?**',route=>{
+    const connectors=['Charging','Available','Faulted'].map((fallback,i)=>({
+      station_id:STATION,identity:'cvci000001',connector_id:i+1,
+      status:i===0?cp1Status:fallback,simulated:true,
+      power_w:i===0&&cp1Status==='Charging'?11000:0,
+      power_updated_at:new Date().toISOString()
+    }));
+    return route.fulfill({json:{live:[{station_id:STATION,identity:'cvci000001',
+      connected:true,simulated:true,vendor:'Enelion',model:'Lumina'}],
+      connectors,transactions:[]}});
+  });
+  await page.goto('http://127.0.0.1:10000/app');
+  const row=page.locator('.point-row').filter({hasText:'Stellplatz A1'});
+  await expect(row.locator('.cv-point-status')).toContainText('Lädt');
+  await expect(page.locator('#analyticsChart .cv-chart-empty')).toBeVisible();
+  await page.evaluate(()=>{
+    window.__cvStableNodes={
+      main:document.querySelector('#content'),
+      tenant:document.querySelector('#globalTenantSelect'),
+      chart:document.querySelector('#analyticsChart'),
+      chartPlaceholder:document.querySelector('#analyticsChart .cv-chart-empty'),
+      station:document.querySelector('[data-live-station]'),
+      site:document.querySelector('[data-live-site]'),
+      point:[...document.querySelectorAll('[data-live-point]')]
+        .find(x=>x.textContent.includes('Stellplatz A1')),
+      lumina:[...document.querySelectorAll('[data-live-point]')]
+        .find(x=>x.textContent.includes('Stellplatz A1'))?.querySelector('.lumina-preview')
+    };
+  });
+  cp1Status='Available';
+  await page.evaluate(()=>window.__cvTestLiveTick());
+  await expect(row.locator('.cv-point-status')).toContainText('Bereit');
+  const identities=await page.evaluate(()=>{
+    const before=window.__cvStableNodes;
+    return {
+      main:before.main===document.querySelector('#content'),
+      tenant:before.tenant===document.querySelector('#globalTenantSelect'),
+      chart:before.chart===document.querySelector('#analyticsChart'),
+      chartPlaceholder:before.chartPlaceholder===document.querySelector('#analyticsChart .cv-chart-empty'),
+      station:before.station===document.querySelector('[data-live-station]'),
+      site:before.site===document.querySelector('[data-live-site]'),
+      point:before.point?.isConnected===true,
+      lumina:before.lumina?.isConnected===true,
+      image:before.lumina?.querySelector('img')?.isConnected===true,
+      led:before.lumina?.classList.contains('lumina-ready')===true
+    };
+  });
+  for(const [part,preserved] of Object.entries(identities))
+    expect(preserved,part+' must not flash/recreate on poll').toBe(true);
+});
