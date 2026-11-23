@@ -1984,7 +1984,8 @@
     const tid=state.tenant;
     const view=preview;
     const r=await api('/api/ocpp/live?tenantId='+encodeURIComponent(tid));
-    if(changingView||state.tenant!==tid||preview!==view||$('modalHost').innerHTML)return;
+    if(changingView||state.tenant!==tid||preview!==view||$('modalHost').innerHTML||
+       !['sites','overview'].includes(state.page)||document.activeElement?.id==='searchInput')return;
     db.ocpp=(r.live||[]).filter(x=>testTools()||!x.simulated);
     db.ocppConnectors=(r.connectors||[]).filter(x=>testTools()||!x.simulated);
     db.transactions=r.transactions||[];
