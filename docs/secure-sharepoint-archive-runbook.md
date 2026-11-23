@@ -37,8 +37,18 @@ node scripts/ops/cloud-archive-runner.mjs sessions
 
 Vorgesehene Zeitintervalle: Vollbackup **täglich**; CSV-Snapshot **zweimal pro Woche** (z.B. Montag/Donnerstag). Das ist **noch kein aktiver Cronjob**. Bei großen Beständen oder starkem laufendem Betrieb RPO und Backup-Frequenz anpassen, beispielsweise häufiger als täglich. Eine doppelte CSV-Sammlung ist ein zusätzliches Archiv und kein vollständiger Restore.
 
+## Wie ein autorisierter Betreiber die verschlüsselte Session-Datei lokal öffnet
+
+Die `.cvcsv`-Datei in SharePoint ist absichtlich **nicht direkt in Excel lesbar**. Lade sie nur in einen geschützten lokalen Ordner, stelle den AES-Key über den Betriebssystem-Secret-Manager sicher bereit und rufe dort auf:
+
+```bash
+node scripts/ops/decrypt-session-snapshot.mjs /geschuetzt/chargevisor-sessions.cvcsv /geschuetzt/ladevorgaenge.csv
+```
+
+Das Skript entschlüsselt mit Authentizitätsprüfung, schreibt die CSV erst in ein privates temporäres Verzeichnis auf demselben Laufwerk und veröffentlicht sie nur über eine **atomare, nicht überschreibende** Dateiverknüpfung. Bestehende CSV-Dateien werden niemals ersetzt. Danach die Klartext-CSV nach der vorgesehenen lokalen Aufbewahrungsregel sicher verwahren/löschen; die verschlüsselte SharePoint-Datei bleibt die eigentliche Archivkopie. Einen Backup-Key **niemals** im Terminal-Aufruf oder in einem Skript mit ablegen.
+
 ## Tests, die bereits vorgesehen sind
-- `node --test scripts/ops/csv-session-format.test.mjs scripts/ops/session-snapshot.test.mjs` prüft deterministische Spalten, CSV-Sicherheit, verschlüsselte Momentaufnahme, Key-Länge und SQL-Read-only gegen künstliche Daten;
+- `node --test scripts/ops/csv-session-format.test.mjs scripts/ops/session-snapshot.test.mjs scripts/ops/decrypt-session-snapshot.test.mjs` prüft deterministische Spalten, CSV-Sicherheit, verschlüsselte Momentaufnahme, Key-Länge und SQL-Read-only gegen künstliche Daten;
 - `python -m unittest discover -s scripts/ops -p 'test_sharepoint_uploader.py' -v` prüft Upload/Größenvergleich mit einer **lokal simulierten** Graph-Antwort und Ablehnung von unverschlüsselten Dateien, unsicheren Hostnamen und Größenfehlern;
 - `.github/workflows/secure-sharepoint-archive-tests.yml` führt diese Tests (ohne echte Kundendaten/Secrets) auf dem Entwicklungs-PR aus.
 
