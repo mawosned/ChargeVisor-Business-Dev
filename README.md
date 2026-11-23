@@ -1,5 +1,17 @@
 # ChargeVisor Business – Entwicklungsstand und Sicherheitsregeln (23.11.2026)
 
+## UI-Fix: Blitzen im 12-Sekunden-Live-Poll (23.11.2026)
+
+**Fehler/Ursache:** Unter `Standorte & Ladepunkte` und auf der `Übersicht` rief `pollLive()` nach jeder OCPP-Datenabfrage (Timer: exakt 12.000 ms) das globale `render()` auf. `render()` setzt `#content.innerHTML` komplett neu, ebenso Navigation/Kundenwahl; das Übersicht-Dashboard lud zudem `analyticsChart.innerHTML` und `analyticsSessions.innerHTML` wiederholt. Folge: deutliches Blitzen, Zurücksetzen der LED-/CSS-Animationen und Neuladen der Lumina-Bildelemente, obwohl der Render-Server stabil weiterlief.
+
+**Gezielte, bewusst eng begrenzte Reparatur:** Nur `app-live.js` im Frontend geändert, ohne Layout/Styling/Lumina-SVG/HTML-Routen oder Intervalle zu ändern. `pollLive` behält seine bestehende 12-Sekunden-OCPP-Abfrage und aktualisiert den angezeigten Bereich über `renderLiveOnly()`. Ein kleiner keyed-DOM-Abgleich erhält die Identität bestehender Kundenwahl, Standorte, Stationen, Punkte, Lumina-Grafiken, LEDs, Buttons, SVG-Diagramm und Messwerte, verändert aber sichtbar Status/Text/Leistungswerte/fehlende oder neue Elemente. Async-Charts/-Historie werden nicht durch `Messwerte werden geladen` ersetzt. Auch `loadOverview()` aktualisiert Chart und Historie mit demselben Abgleich. Während offener Dialoge, verstecktem Tab oder aktiver Suche kein Poll-Umbau; überholte Poll-Antworten werden nach Seitenwechsel verworfen. Alle bisherigen vollständigen `render()`-Aufrufe bei echten Benutzeraktionen und Laden bleiben erhalten.
+
+**Tests und Schutz:** Eigener Chromium-Regressionstest simuliert einen echten 12s-Poll, wechselt OCPP-Status `Charging` → `Available` und verlangt zugleich dasselbe `#content`-Element, dieselbe Kundenwahl, dasselbe Diagramm, denselben Standort, dieselbe Ladestation, den Ladepunkt und dasselbe Lumina-Bild/LED-Element. Bestehende Feature-/Berechtigungs-/OCPP-/Simulator-/Kunden-/History-Tests zusätzlich ausführen. UI-Freeze-Fingerprint im bewusst UI-spezifischen Branch nur für `app-live.js` aktualisiert; 13 weitere geschützte Dateien/Assets bleiben exakt unverändert.
+
+**Freigabegrenze:** Zunächst Entwicklungs-Branch `fix/live-poll-flicker-20261123`; erst nach grünen Tests, Übernahme in privates Repository, dokumentiertem Rücksprungpunkt und Render-Check deployen. **Keine Änderung der Backend-OCPP-Protokollverarbeitung und keinerlei Neon-Datenkorrektur.** Die separat bestehenden ungeklärten OCPP-Verbindungsabbrüche bleiben unabhängig offen.
+
+
+
 ## RELEASEKANDIDAT 23.11.2026 – Lumina-Ladebuttons + lesende OCPP-Diagnose
 
 **Freigabe:** Nach beendetem 120-Minuten-Test hat der Nutzer am 23.11. ausdrücklich die Implementierung, sofortige Render-Bereitstellung und README-Dokumentation beauftragt. Dieser Release-Branch integriert die zuvor einzeln getesteten Entwicklungs-PRs [#14 Backend](https://github.com/mawosned/ChargeVisor-Business-Dev/pull/14) und [#15 UI](https://github.com/mawosned/ChargeVisor-Business-Dev/pull/15). Kein ersatzweises Redesign, keine Löschung vorhandener Funktionen.
