@@ -84,6 +84,14 @@ class SoakRunner:
         self.audit = AuditStore(identity, base_dir=self.run_dir)
         self.report_paths = {}
         self.finished = False
+        # A transient socket loss must not silently invalidate the whole run.
+        # Keep elapsed wall-clock time and record every interruption/recovery.
+        self.connection_ready = asyncio.Event()
+        self.connection_ready.set()
+        self.transport_interruptions = 0
+        self.transport_recoveries = 0
+        self.recovered_transactions = 0
+        self.pending_recovery = False
         self.initial_profiles = set(master.limits.profiles)
         self.verifier = BackendVerifier.from_environment(identity)
 
@@ -117,6 +125,34 @@ class SoakRunner:
                             evidence=evidence,
                             reviewer='Automatic backend verifier' if evidence else '')
         self.push(verdict, case_id, observed, connector)
+
+    def connection_lost(self, detail="WebSocket unexpectedly closed"):
+        """Pause new scenarios; transport failures remain visible in the matrix."""
+        if not self.connection_ready.is_set() or self.finished:
+            return
+        self.connection_ready.clear()
+        self.pending_recovery = True
+        self.transport_interruptions += 1
+        self.record("SCENARIO.Offline.Disconnect", "FAIL",
+                    f"Unexpected OCPP transport interruption #{self.transport_interruptions}: {detail}")
+        self.push("FAIL", "ConnectionLost",
+                  "Dauertest pausiert; automatischer Reconnect wird abgewartet")
+
+    def connection_restored(self, master, recovered_transactions=0):
+        """Called only after boot and any orphaned transactions are reconciled."""
+        if self.finished:
+            return
+        self.master = master
+        self.owned_txs.clear()
+        self.transport_recoveries += 1
+        self.recovered_transactions += recovered_transactions
+        self.pending_recovery = False
+        self.record("SCENARIO.Offline.Reconnect", "PROTOCOL_OK",
+                    f"Reconnect #{self.transport_recoveries}: Boot accepted; "
+                    f"{recovered_transactions} prior transactions stopped; DB/UI still unverified")
+        self.connection_ready.set()
+        self.push("INFO", "Reconnect",
+                  "OCPP-Verbindung wiederhergestellt; Testablauf wird fortgesetzt")
 
     async def call(self, payload, label, limit=18):
         return await asyncio.wait_for(self.master.call(payload), timeout=limit)
@@ -713,6 +749,10 @@ class SoakRunner:
                     "BootNotification Accepted during connection; backend info unchecked")
         try:
             while monotonic() < self.stop_at:
+                if not self.connection_ready.is_set():
+                    await self.tick("Warte auf automatischen OCPP-Reconnect")
+                    await asyncio.sleep(min(1.0, max(0.0, self.stop_at - monotonic())))
+                    continue
                 step = self.planned_steps[self.completed_steps % len(self.planned_steps)]
                 self.cycle = self.completed_steps + 1
                 await self.tick(f"Test {self.cycle}: {step['kind']} "
@@ -734,7 +774,11 @@ class SoakRunner:
                 dwell_until = min(self.stop_at, monotonic() + self.step_interval_seconds)
                 while monotonic() < dwell_until:
                     if getattr(getattr(self.master, "_connection", None), "closed", False):
-                        raise ConnectionError("OCPP socket closed during endurance run")
+                        self.connection_lost("OCPP socket closed during endurance run")
+                    if not self.connection_ready.is_set():
+                        await self.tick("Reconnect läuft; kein neuer Testschritt")
+                        await asyncio.sleep(min(1.0, max(0.0, self.stop_at - monotonic())))
+                        continue
                     await self.tick(f"Wartezeit nach {step['kind']} "
                                     f"({int(dwell_until - monotonic())}s)")
                     await asyncio.sleep(min(3.0, max(0, dwell_until - monotonic())))
@@ -745,11 +789,21 @@ class SoakRunner:
             status = "FAILED"
             self.push("FAIL", "RUN", f"{type(exc).__name__}: {exc}")
         finally:
+            if self.pending_recovery:
+                status = "FAILED"
+                self.push("FAIL", "Reconnect",
+                          "Testzeit abgelaufen ohne wiederhergestellte OCPP-Verbindung")
+            elif status == "COMPLETED" and self.transport_interruptions:
+                status = "COMPLETED_WITH_INTERRUPTION"
             leftovers = [c for c in self.owned_txs
                          if self.master.points[c]["tx"] is not None]
-            results = await asyncio.gather(*(
-                asyncio.wait_for(self.master.stop_one(c), timeout=8)
-                for c in leftovers), return_exceptions=True)
+            if self.connection_ready.is_set():
+                results = await asyncio.gather(*(
+                    asyncio.wait_for(self.master.stop_one(c), timeout=8)
+                    for c in leftovers), return_exceptions=True)
+            else:
+                results = [ConnectionError("Socket offline; cannot stop transaction")
+                           for _ in leftovers]
             for connector, outcome in zip(leftovers, results):
                 if isinstance(outcome, BaseException):
                     self.push("FAIL", "Cleanup",
@@ -792,6 +846,10 @@ class SoakRunner:
             ),
             "cycles_completed": self.cycle,
             "test_steps_completed": self.completed_steps,
+            "transport_interruptions": self.transport_interruptions,
+            "transport_recoveries": self.transport_recoveries,
+            "recovered_transactions": self.recovered_transactions,
+            "pending_recovery_at_finish": self.pending_recovery,
             "minimum_pause_after_each_test_seconds": self.step_interval_seconds,
             "test_timing": "one connector transition per test step; parallel charging ramps one/minute",
             "wallbox_nominal_w": self.master.limits.nominal_w,
