@@ -31,6 +31,8 @@ jobs:
         id: probe
         continue-on-error: true
         env:
+          CV_MONITOR_REQUIRE_OPS: '1'
+          CV_MONITOR_TOKEN: ${{ secrets.CV_OPS_MONITOR_TOKEN }}
           CV_MONITOR_TARGET_URL: ${{ vars.CV_MONITOR_TARGET_URL }}
         run: node scripts/ops/health-probe.mjs
       - name: Open one incident on outage, close on recovery
