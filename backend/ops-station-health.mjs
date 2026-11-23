@@ -15,7 +15,7 @@ export async function readStationHealth(pool,{staleSeconds=180}={}){
       'JOIN cv_tenants t ON t.id=c.tenant_id',
       'LEFT JOIN cv_ocpp_live l ON l.identity=c.identity AND l.tenant_id=c.tenant_id',
       "WHERE s.is_simulator=false AND t.status='active' AND t.deleted_at IS NULL",
-      'ORDER BY t.name,s.name,c.identity LIMIT 2000'
+      'ORDER BY t.name,s.name,c.identity LIMIT 2001'
     ].join(' ')),
     pool.query([
       'SELECT identity,COUNT(*)::int AS open_count',
@@ -23,6 +23,8 @@ export async function readStationHealth(pool,{staleSeconds=180}={}){
       'GROUP BY identity'
     ].join(' '))
   ]);
+  // Fail closed rather than silently reporting a partial station inventory as healthy.
+  if(stations.rows.length>2000)throw Error('Station inventory exceeds V1 monitoring limit');
   const openCounts=new Map(sessions.rows.map(x=>[x.identity,Number(x.open_count)]));
   const evaluatedAt=new Date().toISOString(),now=Date.now();
   const rows=stations.rows.map(row=>{
