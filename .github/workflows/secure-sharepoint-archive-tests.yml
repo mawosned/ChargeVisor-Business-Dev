@@ -28,7 +28,9 @@ jobs:
       - name: Confirm existing frontend remains unchanged
         run: node scripts/verify-frontend-unchanged.mjs
       - name: Unit-test encrypted real-session snapshots and CSV safety
-        run: node --test scripts/ops/csv-session-format.test.mjs scripts/ops/session-snapshot.test.mjs
+        run: node --test scripts/ops/csv-session-format.test.mjs scripts/ops/session-snapshot.test.mjs scripts/ops/decrypt-session-snapshot.test.mjs
+      - name: Check PostgreSQL 18 dump wrapper shell syntax
+        run: bash -n scripts/ops/pg18-dump.sh
       - name: Mock-test Microsoft Graph uploader without tenant access
         run: python -m unittest discover -s scripts/ops -p 'test_sharepoint_uploader.py' -v
       - name: Confirm no live secrets or customer DB are required
