@@ -8,6 +8,7 @@ import {applyLuminaFreecharge,handleFreechargeConfiguration} from './freecharge.
 import {validateOcppCsmsCommand,validateOcppCsmsResponse} from './ocpp-command-catalog.mjs';
 import {createOcppTestVerifier} from './ocpp-test-verifier.mjs';
 import {getPowerRecoveryStatus} from './ocpp-power-recovery.mjs';
+import {createFirmwareManager,ensureFirmwareSchema} from './ocpp-firmware.mjs';
 
 const now=()=>new Date().toISOString();
 const validId=id=>typeof id==='string'&&/^[-\w.:]{2,120}$/.test(id);
@@ -40,6 +41,7 @@ export async function ensureOcppSchema(pool){
   await pool.query('CREATE INDEX IF NOT EXISTS cv_ocpp_transactions_station_idx ON cv_ocpp_transactions(identity,started_at DESC)');
   await ensureTestRfidSchema(pool);
   await ensurePhysicalOcppSchema(pool);
+  await ensureFirmwareSchema(pool);
   await pool.query(`ALTER TABLE cv_ocpp_connector_live
     ADD COLUMN IF NOT EXISTS status_changed_at timestamptz,
     ADD COLUMN IF NOT EXISTS error_code text,
@@ -58,6 +60,7 @@ export function createOcppBridge(pool,env=process.env){
     handleProtocols:()=> 'ocpp1.6'});
   const physical=createPhysicalOcpp(pool,env);
   const active=new Map(),virtualTokens=new Map();
+  const firmwareManager=createFirmwareManager({pool,env,active,sendCommand,event});
   async function state(ctx,update){
     const v=[ctx.identity,ctx.tenantId,ctx.stationId,
       update.connected??true,update.status??null,update.action??null,
@@ -100,6 +103,7 @@ export function createOcppBridge(pool,env=process.env){
         if(!p.chargePointVendor||!p.chargePointModel){fail('FormationViolation','Hersteller oder Modell fehlen');return;}
         const vendor=String(p.chargePointVendor).slice(0,120),model=String(p.chargePointModel).slice(0,120),firmware=String(p.firmwareVersion||'').slice(0,120);
         await state(ctx,{action:c.action,vendor,model,firmware});await event(ctx,c.action,{vendor,model,firmware});
+        await firmwareManager.observeBoot(ctx,firmware);
         reply({status:'Accepted',currentTime:now(),interval:60});return;
       }
       case 'Heartbeat':
@@ -218,7 +222,9 @@ export function createOcppBridge(pool,env=process.env){
         if(!['Downloaded','DownloadFailed','Downloading','Idle','InstallationFailed','Installing','Installed'].includes(p.status)){
           fail('PropertyConstraintViolation','Ungültiger Firmware-Status');return;
         }
-        await event(ctx,c.action,{status:p.status});reply({});return;
+        await event(ctx,c.action,{status:p.status});
+        await firmwareManager.observeStatus(ctx,p.status);
+        reply({});return;
       }
       case 'DataTransfer': {
         if(typeof p.vendorId!=='string'||!p.vendorId.trim()||p.vendorId.length>255||
@@ -280,7 +286,7 @@ export function createOcppBridge(pool,env=process.env){
     if(!ctx||!ctx.simulated||ctx.tenantId!==station.tenant_id||
        ctx.stationId!==station.station_id||ctx.ws.readyState!==WebSocket.OPEN)
       return {code:409,error:'Test-Wallbox ist nicht verbunden'};
-    if(ctx.pendingCommand||ctx.controlling||ctx.configuringFreecharge||ctx.advancedInProgress)
+    if(ctx.pendingCommand||ctx.controlling||ctx.configuringFreecharge||ctx.advancedInProgress||ctx.firmwareInProgress)
       return {code:409,error:'Die Test-Wallbox verarbeitet bereits einen Befehl'};
     ctx.advancedInProgress=true;
     try{
@@ -298,7 +304,7 @@ export function createOcppBridge(pool,env=process.env){
     if(!ctx||ctx.tenantId!==point.tenant_id||ctx.stationId!==point.station_id||
       ctx.simulated||ctx.ws.readyState!==WebSocket.OPEN)
       return {code:409,body:{error:'Die Wallbox ist nicht mit ChargeVisor verbunden'}};
-    if(ctx.configuringFreecharge||ctx.controlling)
+    if(ctx.configuringFreecharge||ctx.controlling||ctx.firmwareInProgress)
       return {code:409,body:{error:'Für diese Wallbox läuft bereits ein Konfigurationsauftrag'}};
     ctx.configuringFreecharge=true;
     try{
@@ -309,7 +315,7 @@ export function createOcppBridge(pool,env=process.env){
     const ctx=active.get(point.ocpp_identity);
     if(!ctx||ctx.tenantId!==point.tenant_id||ctx.stationId!==point.station_id||ctx.simulated||
        ctx.ws.readyState!==WebSocket.OPEN)return {code:409,error:'Die Wallbox ist offline'};
-    if(ctx.configuringFreecharge||ctx.controlling||ctx.pendingCommand)return {code:409,error:'Die Wallbox verarbeitet bereits einen Befehl'};
+    if(ctx.configuringFreecharge||ctx.controlling||ctx.pendingCommand||ctx.firmwareInProgress)return {code:409,error:'Die Wallbox verarbeitet bereits einen Befehl'};
     const connector=point.connector_number;
     ctx.controlling=true;
     try{
@@ -460,7 +466,7 @@ export function createOcppBridge(pool,env=process.env){
     virtualTokens.set(identity,{secret,until:Date.now()+120000});
     return secret;
   }
-  return {upgrade,simulate,active,issueVirtualToken,physical,configureFreecharge,control,advancedCommand};
+  return {upgrade,simulate,active,issueVirtualToken,physical,configureFreecharge,control,advancedCommand,firmware:firmwareManager};
 }
 export function createOcppApi({pool,getActor,bridge,port,env}){
   const origin=String(env.CV_PUBLIC_URL||'').replace(/\/$/,'');
@@ -479,6 +485,39 @@ export function createOcppApi({pool,getActor,bridge,port,env}){
         if(!/^\d{1,3}$/.test(rawLimit)||!Number.isInteger(limit)||limit<1||limit>100)
           return sendJSON(res,400,{error:'Ungültiges Limit'});
         return sendJSON(res,200,await getPowerRecoveryStatus(pool,actor,tenantId,{limit}));
+      }
+      if(path==='/api/ocpp/firmware'){
+        if(!bridge.firmware)return sendJSON(res,404,{error:'Firmwareverwaltung deaktiviert'});
+        if(req.method==='GET'){
+          const identity=params.get('identity');
+          if(!validUuid(tenantId)||!validId(identity))
+            return sendJSON(res,400,{error:'Kunde und OCPP-ID erforderlich'});
+          const {code,...result}=await bridge.firmware.list(actor,tenantId,identity);
+          return sendJSON(res,code,result);
+        }
+        if(req.method==='POST'){
+          if(actor.role!=='superadmin')return sendJSON(res,403,{error:'Nur Walectra darf Updates anstoßen'});
+          if(!origin||req.headers.origin!==origin||
+             String(req.headers['content-type']||'').split(';')[0]!=='application/json')
+            return sendJSON(res,403,{error:'Ungültige Anfragequelle'});
+          const chunks=[];let size=0;
+          for await(const chunk of req){
+            size+=chunk.length;
+            if(size>4096)return sendJSON(res,413,{error:'Firmwareauftrag zu groß'});
+            chunks.push(chunk);
+          }
+          let body;
+          try{body=JSON.parse(Buffer.concat(chunks).toString('utf8'));}
+          catch{return sendJSON(res,400,{error:'Ungültiges JSON'});}
+          if(!validUuid(body?.tenantId)||!validId(body?.identity))
+            return sendJSON(res,400,{error:'Kunde und OCPP-ID erforderlich'});
+          const {code,...result}=await bridge.firmware.request({
+            actor,tenantId:body.tenantId,identity:body.identity,
+            releaseId:body.releaseId,confirm:body.confirm
+          });
+          return sendJSON(res,code,result);
+        }
+        return sendJSON(res,405,{error:'Methode nicht unterstützt'});
       }
       if(path==='/api/ocpp/test-command'&&req.method==='POST'){
         // Disabled in production unless deliberately enabled. Never send an
