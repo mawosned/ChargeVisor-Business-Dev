@@ -9,6 +9,7 @@ import {validateOcppCsmsCommand,validateOcppCsmsResponse} from './ocpp-command-c
 import {createOcppTestVerifier} from './ocpp-test-verifier.mjs';
 import {getPowerRecoveryStatus} from './ocpp-power-recovery.mjs';
 import {createFirmwareManager,ensureFirmwareSchema} from './ocpp-firmware.mjs';
+import {readStationHealth} from './ops-station-health.mjs';
 
 const now=()=>new Date().toISOString();
 const validId=id=>typeof id==='string'&&/^[-\w.:]{2,120}$/.test(id);
@@ -478,6 +479,13 @@ export function createOcppApi({pool,getActor,bridge,port,env}){
       if(!actor)return sendJSON(res,401,{error:'Nicht angemeldet'});
       const params=new URL(req.url,'http://localhost').searchParams;
       const tenantId=actor.role==='superadmin'?params.get('tenantId'):actor.tenant_id;
+      if(path==='/api/ocpp/ops-summary'&&req.method==='GET'){
+        if(actor.role!=='superadmin')return sendJSON(res,403,{error:'Nur Walectra darf Systemzustand prüfen'});
+        const seconds=Number(params.get('staleSeconds')||180);
+        if(!Number.isInteger(seconds)||seconds<120||seconds>3600)
+          return sendJSON(res,400,{error:'Ungültige Timeout-Grenze'});
+        return sendJSON(res,200,await readStationHealth(pool,{staleSeconds:seconds}));
+      }
       if(path==='/api/ocpp/power-recovery'&&req.method==='GET'){
         if(!validUuid(tenantId))return sendJSON(res,400,{error:'Kunde auswählen'});
         const rawLimit=params.get('limit')||'100';
