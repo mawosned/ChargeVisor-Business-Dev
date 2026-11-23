@@ -295,6 +295,55 @@ try{
   assert.equal(analytics.data.buckets.length,1);
   assert.equal(analytics.data.buckets[0].sessions,503);
   assert.ok(analytics.data.sessions.some(x=>x.id===String(tx)));
+
+  // Power-outage acceptance: abrupt TCP loss (no graceful WebSocket close).
+  // ChargeVisor MUST NOT fabricate a StopTransaction or a billable value.
+  const crashStart={connectorId:1,idTag:card,meterStart:4000,timestamp:new Date().toISOString()};
+  assert.equal((await call(resumed,'Authorize',{idTag:card}))[2].idTagInfo.status,'Accepted');
+  const crashedTx=(await call(resumed,'StartTransaction',crashStart))[2].transactionId;
+  assert.ok(crashedTx>0,'Physical transaction missing before simulated power loss');
+  const killed=once(resumed,'close');
+  resumed.terminate();
+  await killed;
+  let outage=null;
+  for(let tries=0;tries<35;tries++){
+    outage=(await request('/api/ocpp/power-recovery',{cookie:admin.cookie})).data;
+    const item=outage.openSessions.find(x=>Number(x.transactionId)===crashedTx);
+    if(item&&item.connected===false)break;
+    await new Promise(resolve=>setTimeout(resolve,75));
+  }
+  const unconfirmed=outage.openSessions.find(x=>Number(x.transactionId)===crashedTx);
+  assert.ok(unconfirmed,'Physical open transaction must survive abrupt disconnect');
+  assert.equal(unconfirmed.connected,false);
+  assert.equal(unconfirmed.billingState,'unconfirmed');
+  assert.equal(unconfirmed.recovery,'awaiting_stop_transaction');
+  const dbBefore=await pool.query(
+    'SELECT stopped_at,meter_stop_wh FROM cv_ocpp_transactions WHERE id=$1',[crashedTx]);
+  assert.equal(dbBefore.rows[0].stopped_at,null);
+  assert.equal(dbBefore.rows[0].meter_stop_wh,null,'No invented energy at disconnect');
+  assert.ok(!(await request('/api/ocpp/power-recovery',{cookie:other.cookie}))
+    .data.openSessions.some(x=>Number(x.transactionId)===crashedTx),
+    'Unrelated user must not see the interrupted transaction');
+  const recovered=await connect(credentials);
+  assert.equal((await call(recovered,'BootNotification',{
+    chargePointVendor:'Pilot Test',chargePointModel:'Two Connector',
+    firmwareVersion:'1.0'
+  }))[2].status,'Accepted');
+  assert.equal((await call(recovered,'StopTransaction',{
+    transactionId:crashedTx,meterStop:4120,timestamp:new Date().toISOString(),reason:'PowerLoss'
+  }))[0],3);
+  const afterStop=(await request('/api/ocpp/power-recovery',{cookie:admin.cookie}))
+    .data.openSessions;
+  assert.ok(!afterStop.some(x=>Number(x.transactionId)===crashedTx),
+    'Confirmed transaction must leave the recovery queue');
+  const complete=await pool.query(
+    'SELECT stop_reason,meter_stop_wh,stopped_at FROM cv_ocpp_transactions WHERE id=$1',
+    [crashedTx]);
+  assert.equal(complete.rows[0].stop_reason,'PowerLoss');
+  assert.equal(Number(complete.rows[0].meter_stop_wh),4120);
+  assert.ok(complete.rows[0].stopped_at);
+  console.log('PASS physical power loss: open transaction unbilled after abrupt disconnect, '+
+    'then closed with actual PowerLoss StopTransaction on reconnect');
   await request('/api/tenants/'+tenant.id,{method:'PATCH',cookie:superadmin,body:{status:'suspended'}});
   await request('/api/users',{cookie:admin.cookie,status:401});
   console.log('Verified two physical connectors: scoped RFID, reconnect, signed meter metadata, tariff snapshot, complete paginated exports and tenant suspension.');
