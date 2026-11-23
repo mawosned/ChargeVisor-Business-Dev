@@ -1,6 +1,20 @@
 # ChargeVisor Business – Entwicklungsstand und Sicherheitsregeln (23.11.2026)
 
-## OCPP-Simulator: Reconnect-Release vorbereitet – CI/Windows-Test noch ausstehend (23.11.2026)
+## BESTÄTIGT: OCPP-Simulator-Reconnect in DEV – sechs CI-Workflows grün (23.11.2026)
+
+**Stand:** <https://github.com/mawosned/ChargeVisor-Business-Dev/pull/11> ist nach sechs erfolgreich abgeschlossenen GitHub-CI-Workflows in `mawosned/ChargeVisor-Business-Dev/main` gemergt. Merge-Commit: `ee9788eda991e1e9fe3f3171ceb5f20b5774a5c5`. Automatisierte Tests für den Simulator-Reconnect, den Soak-Bericht, den ChargeVisor-Backend-Regressionsschutz, das Browser-Frontend und Mobility House sind erfolgreich. **Kein Code der ChargeVisor-Web-UI wurde verändert, kein Deployment auf Render**, das weiterhin den bisherigen privaten Commit nutzt. Änderungen betreffen ausschließlich `tools/ocpp-chain-simulator/` und READMEs.
+
+**Implementiert:** (1) automatischer WebSocket-Reconnect mit Backoff 2/4/8/16/30 Sekunden, (2) redigiertes lokales `simulator-transport.log` mit Ereignissen, Fehlern und Rückverbindungen, (3) Zählerstand und frühere offene StopTransaction-Antworten vor neuen Ladevorgängen wiederherstellen, (4) 120-Minuten-Soak-Test bei Unterbrechung pausieren und nach erfolgreichem Reconnect fortsetzen, (5) Verbindungsunterbrechung **als FAIL** in der OCPP-Matrix behalten und Gesamtergebnis `COMPLETED_WITH_INTERRUPTION` oder `FAILED` statt irreführend „0 Fehler“ berichten, (6) ausschließlich Teststationen zulassen: die GUI setzt `X-ChargeVisor-Test-Wallbox: 1`, das bestehende Backend lehnt `is_simulator=false` ab.
+
+**Korrekte Station für den Folgetest:** `lumina KI test` mit **20** Connectoren, OCPP-ID `cv24067z51`, `is_simulator=true`, eigenes Test-OCPP-Passwort und berechtigte RFID. Nicht mehr die für den gescheiterten Lauf verwendete normale Sechser-Station `Ladekette Tiefgarage Süd` / `cv6zgvs85d` verwenden. Der letzte Fehllauf war ca. 30 Minuten aktiv, sieben Testladungen #53–59 wurden mit insgesamt 8,591 kWh simulierten Werten beendet und in Neon gespeichert. Die zugrunde liegende Ursache des unerwarteten Abbruchs bleibt unbewiesen; Render zeigte während des Fehlers keine Betriebsunterbrechung und die private echte Enelion Lumina sendete Heartbeats.
+
+**NOCH OFFEN UND NICHT ALS ERFOLGREICH BEHAUPTEN:** Lokale Windows-GUI wurde noch **nicht** aus diesem Merge aktualisiert; der 120-Minuten-Echt-Dauertest gegen Render, reale Reconnect-/StopTransaction-Recovery, korrekte Simulations-Markierung, 20er-Connector-DB/UI-Tests, stale Leistungs-/Statuswerte und Ergebnisreports stehen aus. Den **lokalen Updater zuerst auf die öffentliche Quelle prüfen**; zuvor war der Updater auf Windows veraltet. Der aktualisierte öffentliche Updater testet `test_reconnect.py` offline, sichert die bisherige Installation und tauscht Dateien nur nach grünem Test aus. Kein automatisches lokales Update durch GitHub.
+
+**SEPARAT WICHTIG – BACKUP:** Der **echte** verschlüsselte PostgreSQL-18-Dump nach Microsoft SharePoint mit anschließendem Download und Restore wurde noch NICHT durchgeführt. GitHub-CI hatte nur isolierte Test-Backupdaten. Das ist weiterhin eine priorisierte offene Aufgabe, aber kein Blocker für diesen Testbetrieb.
+
+
+
+## OCPP-Simulator: historische Vorbereitung vor bestandenem CI (23.11.2026)
 
 **Auftrag/Stand:** Der gescheiterte 120-Minuten-Test (Abbruch nach ~30 Minuten, ohne WebSocket-Close-Frame) wurde mit Upload-Log, 82-Fälle-Testmatrix, read-only Neon-Abfragen und Render-Ereignis-/Leistungsdaten analysiert. Sieben Testtransaktionen #53–59 und 674 MeterValues waren in Neon vorhanden und korrekt beendet. Render war nicht ausgefallen, die private echte Lumina kommunizierte weiter. **Ursache des Transportabbruchs nicht sicher identifiziert.** Das bisherige Ergebnis (21 PROTOCOL_OK, 61 NOT_TESTED, 0 FAIL in Matrix trotz gescheitertem Gesamtlauf) war für die Zuverlässigkeit irreführend.
 
