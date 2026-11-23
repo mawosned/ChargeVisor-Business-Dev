@@ -1,5 +1,20 @@
 # ChargeVisor Business – Entwicklungsstand und Sicherheitsregeln (23.11.2026)
 
+## PREPARED / NICHT DEPLOYED – Ladebuttons und Lumina-Strombegrenzungsdiagnose (23.11.2026)
+
+**Hintergrund:** Bei der echten Enelion Lumina waren ohne DLB bei 16 A Geräteeinstellung und ohne Fahrzeugbegrenzung tatsächlich nur ca. 2,76–2,95 kW messbar. Im über Neon protokollierten letzten Ladevorgang traten ca. 12-A-Leistung, eine Pause mit `SetChargingProfile`, später erneutes Laden **ohne protokolliertes Resume** und ein `remote_paused=true`-Flag trotz `Charging` auf. Eine alte/lokale OCPP-Grenze wird nur vermutet, nicht bewiesen. Keine Profile löschen oder Reset auslösen.
+
+**Branch:** `feature/ocpp-readonly-composite-and-charge-controls-20261123` (öffentliches DEV, **NICHT main, NICHT Render**).
+
+**Vorbereitete Änderungen:**
+- Enge Superadmin-Diagnose `POST /api/ocpp/composite-schedule`: expliziter Klick auf `OCPP-Ladeprofil prüfen` im Detail der gewünschten physischen Station, authentifizierte Tenant-/Point-Prüfung, CSRF-/Origin-Schutz, nur `GetCompositeSchedule` mit Connector-ID/duration=300 s/unit `A`, streng begrenzte und validierte Antwort, **keine Set-/Clear-/Reset-/Konfigurationsoperation**, keine Speicherung. `Rejected`, `NotSupported`, leerer Plan, `W` vs `A` und `numberPhases` werden unterschieden. Diese Antwort beweist nicht, wer eine Grenze gesetzt hat. Vorher prüfen, ob die Enelion den optionalen Befehl unterstützt.
+- Einheitliche Ladebutton-Zustandsmatrix: `Charging` und aktive TX = **nur Pause**; per CSMS pausierte TX in `SuspendedEVSE/SuspendedEV` = **Play + Stop**; fahrzeugseitig ausgesetzt bei aktiver TX ohne CSMS-Pause = erst Pause; `Preparing/SuspendedEV/SuspendedEVSE/Finishing` ohne TX = Play; `Available`/offline ohne Start; widersprüchlicher Status `Charging`+DB-`remote_paused` bleibt als Ladung erkennbar, erneutes Pause-Kommando idempotent möglich. `Finishing` (angesteckt nach Stop) erhält user-initiierten RemoteStart-Versuch; das Gerät darf `Rejected` antworten, nicht als garantiert funktionsfähig darstellen.
+- Keine Änderung an Grafik, Farben, LEDs, Navigation, Rollen, Kunden-/Nutzerlisten, Berichten, RFID, BLITZ, externer Simulatorsoftware oder Neon-Konfiguration.
+- Unit-Tests für Statusmatrix, alte Pause-Flags, Diagnostik, Antwortvalidierung, Zugriffsschutz, keine automatisch getriggerte Diagnose. **CI und Hardwaretest ausstehend**, bis geprüft.
+
+**Freigabegrenze:** Der **laufende 120-Minuten-Dauertest wird nicht unterbrochen**; weder öffentliche DEV-main-Merges noch private Deploys/Neon-Datenänderungen vor dem Ergebnis. Nach Testende OCPP-Logs, vollständigen Soak-Report und Datenbank verifizieren, dann PR/CI bewerten und mit dem Nutzer Deployment/Direktprobe der Lumina abstimmen. Auch das noch nicht nachgewiesene verschlüsselte Neon→SharePoint-Backup/Restore bleibt WICHTIG.
+
+
 ## FIX BESTÄTIGT / AUSGELIEFERT IM DEV – HTTP 403 bei normalem OCPP-Simulator behoben (23.11.2026)
 
 - **Öffentliches `ChargeVisor-Business-Dev/main`**, Merge-Commit `d6e3bf32778a59d1fca78d734cb95a0456dab7f6`, <https://github.com/mawosned/ChargeVisor-Business-Dev/pull/12>. **Alle sechs PR-CI-Workflows erfolgreich** (einschließlich OCPP-Desktop-Simulator-Tests und ChargeVisor-Browserregression). Der neue Regressionstest stellt sicher, dass `desktop_simulator.py` **keinen `X-ChargeVisor-Test-Wallbox`-Header** mehr an eine reguläre OCPP-Verbindung anhängt.
