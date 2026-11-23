@@ -1,9 +1,8 @@
 #!/usr/bin/env node
-// Offline extraction of an encrypted session snapshot for an authorized operator.
-// No network access; destination must not exist, and must be on an operator-only drive.
-// Example: CV_BACKUP_KEY_HEX=... node scripts/ops/decrypt-session-snapshot.mjs file.cvcsv local.csv
-import {stat,open,unlink,chmod} from 'node:fs/promises';
-import {resolve,extname} from 'node:path';
+// Offline authenticated extraction of a .cvcsv archive to a protected local CSV.
+// Existing destinations are NEVER overwritten or deleted, even on wrong keys.
+import {stat,open,chmod,mkdtemp,rm,link} from 'node:fs/promises';
+import {resolve,extname,dirname,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {decryptArchiveToFile,keyFromEnv} from './database-archive.mjs';
 
@@ -15,23 +14,25 @@ export async function extractSessionSnapshot(encrypted,destination,key){
   if(!Buffer.isBuffer(key)||key.length!==32)throw Error('Valid backup key required');
   const archive=await stat(input);
   if(!archive.isFile()||archive.size<=36)throw Error('Encrypted archive is too small');
+  // Stage on the SAME filesystem and link atomically without replacing a file.
+  // The generic decrypt helper may clean its own partial output on any error,
+  // so NEVER point it directly to a user-supplied existing destination.
+  const folder=await mkdtemp(join(dirname(output),'.cv-session-extract-'));
+  await chmod(folder,0o700);
+  const staged=join(folder,'snapshot.csv');
   try{
-    await decryptArchiveToFile(input,output,key);
-    const file=await open(output,'r');
+    await decryptArchiveToFile(input,staged,key);
+    const file=await open(staged,'r');
     try{
       const prefix=Buffer.alloc(3);
       await file.read(prefix,0,3,0);
       if(!prefix.equals(Buffer.from([0xef,0xbb,0xbf])))
         throw Error('Authenticated content is not a ChargeVisor CSV snapshot');
     }finally{await file.close();}
-    await chmod(output,0o600);
+    await chmod(staged,0o600);
+    await link(staged,output); // EEXIST is intentional: never overwrite.
     return {bytes:(await stat(output)).size,verified:true};
-  }catch(error){
-    // Avoid deleting a pre-existing target on a refusal (decrypt uses wx).
-    if(error.message.includes('Authenticated content'))
-      await unlink(output).catch(()=>{});
-    throw error;
-  }
+  }finally{await rm(folder,{recursive:true,force:true});}
 }
 async function main(){
   if(process.argv.length!==4)throw Error('Usage: encrypted.cvcsv local.csv');
