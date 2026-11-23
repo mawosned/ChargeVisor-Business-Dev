@@ -425,15 +425,23 @@ test('Reference layout renders actual states and retains the pause, resume and c
   await expect(available.locator('.charge-symbol.ready')).toBeVisible();
   await expect(page.locator('.cv-station-power')).toHaveText(['Total aktuell: 0 kW','Total aktuell: 22 kW']);
   await expect(stateOne.locator('.cv-point-power')).toHaveText('11 kW');
+  // User-approved control sequence: while charging ONLY Pause; after a
+  // confirmed Pause exactly Resume + Stop, with Stop requiring confirmation.
+  await expect(stateOne.locator('.cv-point-controls button')).toHaveCount(1);
   await stateOne.getByRole('button',{name:'Ladevorgang pausieren'}).click();
   await expect(stateOne.locator('.cv-point-status')).toContainText('Pausiert');
-  await expect(stateOne.locator('.cv-point-controls button').first()).toHaveAttribute('aria-label','Ladevorgang stoppen');
+  await expect(stateOne.locator('.cv-point-controls button')).toHaveCount(2);
+  await expect(stateOne.locator('.cv-point-controls button').first()).toHaveAttribute('aria-label','Ladevorgang fortsetzen');
   await stateOne.getByRole('button',{name:'Ladevorgang stoppen'}).click();
   await expect(page.getByRole('dialog')).toContainText('wirklich stoppen?');
   expect(stopConfirmed).toBe(false);
   await page.getByRole('button',{name:'Abbrechen'}).click();
   await stateOne.getByRole('button',{name:'Ladevorgang fortsetzen'}).click();
   await expect(stateOne.locator('.cv-point-status')).toContainText('Lädt');
+  await expect(stateOne.locator('.cv-point-controls button')).toHaveCount(1);
+  await expect(stateOne.getByRole('button',{name:'Ladevorgang pausieren'})).toBeVisible();
+  await stateOne.getByRole('button',{name:'Ladevorgang pausieren'}).click();
+  await expect(stateOne.locator('.cv-point-controls button')).toHaveCount(2);
   await stateOne.getByRole('button',{name:'Ladevorgang stoppen'}).click();
   await page.getByRole('dialog').getByRole('button',{name:'Ladevorgang stoppen'}).click();
   await expect.poll(()=>stopConfirmed).toBe(true);
