@@ -28,6 +28,7 @@ from smart_charging import ChargingProfileModel
 from ocpp_test_console import CoverageWindow
 from ocpp_coverage import AuditStore, CATALOG
 from ocpp_soak import SoakRunner
+from firmware_lifecycle import FirmwareLifecycle
 
 
 class InteractiveMaster(ChainMaster):
@@ -36,6 +37,7 @@ class InteractiveMaster(ChainMaster):
         self.count = count
         self.notify = notify
         self.limits = ChargingProfileModel(count, nominal_w=230 * 3 * nominal_amp)
+        self._firmware = FirmwareLifecycle(self.call, lambda msg: self.event('log', msg))
         self.config = {"HeartbeatInterval": "30", "MeterValueSampleInterval": "5",
                        "EnelionFreeChargeEnabled": "false",
                        "EnelionFreeChargeOcppIdtag": "CV-FREECHARGE"}
@@ -335,6 +337,19 @@ class InteractiveMaster(ChainMaster):
         self.event("log", f"CSMS Reset {type}: Rejected (reboot not emulated)")
         self.event("audit", "CSMS.Reset", f"Reset {type}: Rejected (nicht implementiert)", None)
         return call_result.Reset(status="Rejected")
+
+    @on(Action.update_firmware)
+    async def on_update_firmware(self, location, retrieve_date, retries=None,
+                                 retry_interval=None, **kwargs):
+        # A separate *protocol-only* emulator: no real download or flash.
+        # OCPP UpdateFirmware.conf is empty by specification; independent
+        # status messages and reboot-version observation are the evidence.
+        if not self._firmware.queue(location, can_run=not self.active_transactions()):
+            raise ValueError("Simulated firmware update requires an idle test station and HTTPS URL")
+        self.event("log", "OCPP UpdateFirmware received: protocol simulation queued")
+        self.event("audit", "CSMS.UpdateFirmware",
+                   "Only status/lifecycle emulated; no real firmware updated", None)
+        return call_result.UpdateFirmware()
 
     @on(Action.remote_start_transaction)
     async def on_remote_start(self, id_tag, connector_id=None, **kwargs):
