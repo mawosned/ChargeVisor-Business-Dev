@@ -1,5 +1,22 @@
 # ChargeVisor Business – Entwicklungsstand und Sicherheitsregeln (23.11.2026)
 
+## Render Starter – tatsächlich aktiviert und geprüft (23.11.2026, ca. 16:00 Uhr MEZ)
+
+**VERIFIZIERTER IST-STAND (Render-Service-API und Deploy-Historie, nicht nur Nutzerangabe):**
+
+- **Web-Service:** `chargevisor-business-demo`, Service-ID `srv-dbtk66942hec738takjg`, Region **Frankfurt**, Node.js, URL `https://chargevisor-business-demo.onrender.com`.
+- **Tatsächlich gebuchter Instanztyp:** `0.5c-512mb` = **Render Starter**, 0,5 CPU / 512 MB RAM. Der Nutzer hat den **7-USD/Monat-Tarif selbst aktiviert**. Der Anbieter bestätigt den Instanztyp; eine Prüfung der Kreditkarten- oder Rechnungsdaten war und ist nicht erforderlich. **Es ist NICHT mehr Render Free**. Der gesamte Workspace-Tarif wurde bei dieser Prüfung nicht erneut ausgelesen; frühere Angabe war Hobby.
+- **Letzter Deploy:** `dep-dc259pg8v5cc73eitupg`, ausgelöst durch `service_updated` beim Upgrade, **Status `live`**, beendet `2026-11-23T15:00:44Z` (16:00:44 MEZ). **Laufender Code-Commit:** `0711389a00ccebc359ac53158602376b82f4255c` im privaten GitHub-Repository `mawosned/ChargeVisor-Business`. Das Upgrade hat den bisherigen privaten Stand neu ausgerollt, **nicht** den neuesten Code aus dem öffentlichen Dev-Repo.
+- **Render-GitHub-Konfiguration unverändert:** Privates Repo, Branch `main`, `autoDeploy=yes`; Nutzer möchte seine bisherige Release-Freigabepraxis unverändert. **Keine ungefragten Commits auf privatem `main`** oder Render-Plan-/Billing-/Einstellungsänderungen. Dokumentationsänderungen des privaten Repos ausschließlich im bestehenden Draft-PR #14 bis zur Freigabe.
+- **Nächster Entwicklungsweg unverändert:** Öffentliches `mawosned/ChargeVisor-Business-Dev` für alle Entwicklung, Simulationen und automatisierten Tests; geprüfte Dev-Version erst nach fachlicher Abnahme und ausdrücklicher Freigabe kontrolliert in den privaten Render-Stand übernehmen.
+- **Neon bleibt bewusst kostenlos (Free)**, eigenes ChargeVisor-PG18-Projekt. Falls dessen Grenzen später erreicht werden, erst dann Optionen Neon Upgrade / vollständiger Wechsel zu Render PostgreSQL prüfen; **keine aktuelle Migration, kein Datenbank-Tarifwechsel**.
+- **Produktionsfreigabe steht noch aus:** Starter bietet einen kontinuierlich laufenden Web-Service ohne das Free-Inaktivitätsschlafen, aber keine automatische Hochverfügbarkeit. Reale Enelion Lumina und Windows-/Mobility-House-Simulator mit getrennten Identitäten für WebSocket-Reconnect, Last/Heartbeat, laufende Transaktionen, Ausfälle und Recovery testen. Backup-/SharePoint-Upload, separater Restore, Monitoring/Alarme und kontrollierte Releases bleiben erforderlich. Der Status `live` belegt noch keinen erfolgreichen OCPP-24/7-Test mit Hardware.
+- **Kosten:** Es wurde **hier** keine Zahlung, Tarifänderung oder andere kostenpflichtige Aktion durch den Assistenten durchgeführt. Der Nutzer hat den Starter-Service selbst umgestellt. Keine weiteren kostenpflichtigen Änderungen ohne gesonderte Freigabe.
+
+**Bisherige Passagen zur *geplanten* Starter-Umstellung sind historisch und durch diesen jetzt bestätigten Status überholt. Die oben genannten Echtzeit-Service-Daten haben Vorrang.**
+
+
+
 ## Render Starter – Hostingentscheidung für ChargeVisor (23.11.2026)
 
 **Entscheidung nach Vergleich Render/Hetzner:** Wir bleiben für die aktuelle Pilot- und Aufbauphase bei **Render**. Render ist eine echte, langfristig nutzbare Hostingplattform und nicht nur für Entwicklung gedacht. **Ein Umzug zu Hetzner ist NICHT erforderlich oder beschlossen.** Hetzner kann später erneut geprüft werden, falls reale Betriebskosten, Skalierung, Verwaltungsaufwand oder spezifische Anforderungen das sinnvoll machen. Kein vorsorglicher Plattformwechsel.
