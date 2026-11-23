@@ -6,6 +6,7 @@ import {createPhysicalOcpp,ensurePhysicalOcppSchema} from './physical-ocpp.mjs';
 import {chargingReport} from './charging-report.mjs';
 import {applyLuminaFreecharge,handleFreechargeConfiguration} from './freecharge.mjs';
 import {validateOcppCsmsCommand,validateOcppCsmsResponse} from './ocpp-command-catalog.mjs';
+import {summarizeCompositeSchedule} from './ocpp-composite-read.mjs';
 import {createOcppTestVerifier} from './ocpp-test-verifier.mjs';
 import {getPowerRecoveryStatus} from './ocpp-power-recovery.mjs';
 import {createFirmwareManager,ensureFirmwareSchema} from './ocpp-firmware.mjs';
@@ -312,6 +313,37 @@ export function createOcppBridge(pool,env=process.env){
       return await applyLuminaFreecharge(point.freecharge_enabled,(action,payload)=>sendCommand(ctx,action,payload));
     }finally{ctx.configuringFreecharge=false;}
   }
+  async function readCompositeSchedule(point){
+    // Optional OCPP 1.6J read-only query. Only for a specifically selected
+    // physical connector, initiated by a logged-in Walectra superadmin.
+    const ctx=active.get(point.ocpp_identity);
+    if(!ctx||ctx.tenantId!==point.tenant_id||ctx.stationId!==point.station_id||
+       ctx.simulated||ctx.ws.readyState!==WebSocket.OPEN)
+      return {code:409,error:'Die Wallbox ist offline'};
+    if(ctx.pendingCommand||ctx.controlling||ctx.configuringFreecharge||
+       ctx.advancedInProgress||ctx.firmwareInProgress)
+      return {code:409,error:'Die Wallbox verarbeitet bereits einen Befehl'};
+    if(!Number.isInteger(point.connector_number)||point.connector_number<1)
+      return {code:400,error:'Ungültiger OCPP-Connector'};
+    const request={connectorId:point.connector_number,duration:300,chargingRateUnit:'A'};
+    if(!validateOcppCsmsCommand('GetCompositeSchedule',request).ok)
+      return {code:400,error:'Ungültige OCPP-Diagnose'};
+    ctx.advancedInProgress=true;
+    try{
+      const result=await sendCommand(ctx,'GetCompositeSchedule',request,{raw:true});
+      if(!result.ok)return {
+        code:result.error==='NotSupported'?422:409,
+        error:result.error==='NotSupported'?'Wallbox unterstützt GetCompositeSchedule nicht':
+          'OCPP-Abfrage fehlgeschlagen ('+result.error+')'
+      };
+      if(!validateOcppCsmsResponse('GetCompositeSchedule',result.response).ok)
+        return {code:502,error:'Wallbox hat eine ungültige OCPP-Diagnoseantwort gesendet'};
+      return {code:200,connectorId:point.connector_number,
+        diagnostic:summarizeCompositeSchedule(result.response)};
+    }catch(error){
+      return {code:502,error:'Wallbox meldet keinen auswertbaren OCPP-Ladeplan'};
+    }finally{ctx.advancedInProgress=false;}
+  }
   async function control(point,actor,command){
     const ctx=active.get(point.ocpp_identity);
     if(!ctx||ctx.tenantId!==point.tenant_id||ctx.stationId!==point.station_id||ctx.simulated||
@@ -332,7 +364,11 @@ export function createOcppBridge(pool,env=process.env){
         [action,payload]=['Reset',{type:'Soft'}];
       }else if(command==='start'&&!tx){
         const {rows:[live]}=await pool.query('SELECT status FROM cv_ocpp_connector_live WHERE identity=$1 AND connector_id=$2',[ctx.identity,connector]);
-        if(!['Preparing','SuspendedEV','SuspendedEVSE'].includes(live?.status))return {code:409,error:'Die Wallbox meldet kein angeschlossenes Fahrzeug'};
+        // Some physical chargers remain in Finishing with the cable plugged in
+        // after StopTransaction. Try RemoteStart only on explicit user action;
+        // the wallbox remains authoritative and may reject this request.
+        if(!['Preparing','SuspendedEV','SuspendedEVSE','Finishing'].includes(live?.status))
+          return {code:409,error:'Die Wallbox meldet keinen startfähigen Anschluss'};
         if(!ctx.remoteStart?.startedAt&&ctx.remoteStart?.expires>Date.now())return {code:409,error:'Ein Startbefehl wartet auf die Wallbox'};
         const tag='CVR-'+randomBytes(8).toString('hex');
         ctx.remoteStart={tag,expires:Date.now()+90000,connector,pointId:point.id,actorId:actor.id,userId:actor.role==='user'?actor.id:null};
@@ -341,7 +377,7 @@ export function createOcppBridge(pool,env=process.env){
         return {code:409,error:'Kein aktiver Ladevorgang an diesem Ladepunkt'};
       }else if(command==='stop'){
         [action,payload]=['RemoteStopTransaction',{transactionId:id}];
-      }else if(command==='pause'&&!tx.remote_paused){
+      }else if(command==='pause'&&tx){
         [action,payload]=['SetChargingProfile',{connectorId:connector,csChargingProfiles:{
           chargingProfileId:id,transactionId:id,stackLevel:0,chargingProfilePurpose:'TxProfile',
           chargingProfileKind:'Relative',chargingSchedule:{chargingRateUnit:'A',chargingSchedulePeriod:[{startPeriod:0,limit:0}]}
@@ -467,7 +503,7 @@ export function createOcppBridge(pool,env=process.env){
     virtualTokens.set(identity,{secret,until:Date.now()+120000});
     return secret;
   }
-  return {upgrade,simulate,active,issueVirtualToken,physical,configureFreecharge,control,advancedCommand,firmware:firmwareManager};
+  return {upgrade,simulate,active,issueVirtualToken,physical,configureFreecharge,control,readCompositeSchedule,advancedCommand,firmware:firmwareManager};
 }
 export function createOcppApi({pool,getActor,bridge,port,env}){
   const origin=String(env.CV_PUBLIC_URL||'').replace(/\/$/,'');
@@ -567,6 +603,33 @@ export function createOcppApi({pool,getActor,bridge,port,env}){
       }
       if(path==='/api/ocpp/rfid'){
         return await bridge.physical.handleRfid({actor,req,params,origin,send:(status,data)=>sendJSON(res,status,data)});
+      }
+      if(path==='/api/ocpp/composite-schedule'&&req.method==='POST'){
+        if(actor.role!=='superadmin')return sendJSON(res,403,{error:'Nur Walectra darf OCPP-Ladeprofile auslesen'});
+        if(!origin||req.headers.origin!==origin||
+           String(req.headers['content-type']||'').split(';')[0]!=='application/json')
+          return sendJSON(res,403,{error:'Ungültige Anfragequelle'});
+        const chunks=[];let bytes=0;
+        for await(const chunk of req){
+          bytes+=chunk.length;
+          if(bytes>1024)return sendJSON(res,413,{error:'Diagnoseanfrage zu groß'});
+          chunks.push(chunk);
+        }
+        let body;
+        try{body=JSON.parse(Buffer.concat(chunks).toString('utf8'));}
+        catch{return sendJSON(res,400,{error:'Ungültige Diagnoseanfrage'});}
+        const tid=body?.tenantId,pointId=body?.pointId;
+        if(!validUuid(tid)||!validUuid(pointId))
+          return sendJSON(res,400,{error:'Kunde und Ladepunkt fehlen'});
+        const found=await pool.query(
+          'SELECT p.* FROM cv_chargepoints p JOIN cv_stations s ON s.id=p.station_id AND s.tenant_id=p.tenant_id '+
+          "JOIN cv_tenants t ON t.id=p.tenant_id WHERE p.id=$1 AND p.tenant_id=$2 AND p.enabled AND NOT s.is_simulator "+
+          "AND t.status='active' AND t.deleted_at IS NULL",
+          [pointId,tid]
+        );
+        if(!found.rowCount)return sendJSON(res,404,{error:'Aktiver physischer Ladepunkt nicht gefunden'});
+        const {code,...result}=await bridge.readCompositeSchedule(found.rows[0]);
+        return sendJSON(res,code,result);
       }
       if(path==='/api/ocpp/control'&&req.method==='POST'){
         if(!origin||req.headers.origin!==origin||String(req.headers['content-type']||'').split(';')[0]!=='application/json')
