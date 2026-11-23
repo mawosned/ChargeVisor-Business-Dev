@@ -56,7 +56,7 @@ export async function probeStationHealth(url,token,{fetcher=globalThis.fetch,tim
     if(response.status!==200)return {healthy:false,reason:'STATIONS_HTTP_'+response.status};
     const body=await response.json();
     if(body?.status!=='ok'||!body.stationCounts||
-       !Number.isInteger(body.stationCounts.scanned)||
+       (!Number.isInteger(body.stationCounts.scanned)||body.stationCounts.scanned<1)||
        !Number.isInteger(body.stationCounts.online)||
        body.stationCounts.stale!==0||body.stationCounts.disconnected!==0)
       return {healthy:false,reason:'STATIONS_DEGRADED'};
