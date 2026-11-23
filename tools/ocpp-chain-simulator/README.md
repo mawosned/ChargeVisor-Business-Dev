@@ -1,5 +1,27 @@
 # ChargeVisor – unabhängiger Ladeketten-Simulator
 
+## Aktuelle Updatequelle und bekannter Windows-Pfad (23.11.2026)
+
+**Zuletzt geprüft:** Der im **öffentlichen** Repo `mawosned/ChargeVisor-Business-Dev`, Branch `main`, vorliegende `UPDATE-SIMULATOR.ps1` lädt Dateien aus **`ChargeVisor-Business-Dev/main`**. Der ähnlich benannte Updater im **alten privaten** Feature-Branch `mawosned/ChargeVisor-Business/feature/mobilityhouse-ocpp-chain-tests` lädt dagegen aus dem privaten Repo. **Beide ersetzen sich beim Ausführen nicht selbst**, da `UPDATE-SIMULATOR.ps1` nicht in der jeweiligen Dateiliste steht.
+
+Der Nutzer hat bisher folgende PowerShell-Aufrufart verwendet:
+
+```powershell
+$root = 'C:\1_WORKPLACE\1.1_EV\1_WALECTRA\ChargeVisor\NEU\ChargeVisor-Business-feature-mobilityhouse-ocpp-chain-tests'
+$updater = Get-ChildItem -LiteralPath $root -Recurse -File -Filter UPDATE-SIMULATOR.ps1 |
+    Where-Object { $_.FullName -notmatch '\\backup-\d' } |
+    Select-Object -First 1
+if (!$updater) { throw 'Updater nicht gefunden' }
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File $updater.FullName
+```
+
+**Wichtig:** Der lokale Updater wurde noch nicht direkt überprüft. Vor erneutem Start die `$repo = ...`-Zeile prüfen. Falls die alte private Quelle drinsteht, erst **diesen einen Updater** aus der aktuellen öffentlichen Dev-Version ersetzen (vorher sichern). Nur nach überprüfter Quelle ausführen; mehrere aktive Kandidaten nicht blind über `-First 1` auswählen. Das ist eine lokale Simulatoraktualisierung, **kein Render-Deployment**.
+
+**Belegter Hardwarestand:** Die bestehende **Enelion Lumina** ist echte Hardware und hat laut Nutzer bereits erfolgreich geladen. Screenshot: `Lumina Garage`, `Stellplatz 1`, `Bereit`, OCPP-Master-Connector 1. Sie bleibt unverändert. Sämtliche simulierten Stationen benötigen **separate Test-OCPP-Identitäten**, nie die Lumina-ID. Da der erweiterte Kettensimulator derzeit künstliche Sessions wie normale physische Sessions eintragen kann, keine echten Kunden-/Abrechnungsstationen oder Kundennutzerdaten für seine Tests verwenden. Zuerst 5-Minuten-Rauchtest, danach Dauertest mit getrennten Testkonten/Stations-IDs.
+
+**Repository-Strategie:** Öffentliches Dev-Repo für Entwicklung und Tests (nach privat blockierter GitHub-Actions-Abrechnung); privates Repo für spätere kontrollierte Übernahme und Render. Neon Free bleibt vorerst. Render-Konfiguration und reale Hardware-Anbindung ohne gesonderte Freigabe unverändert lassen.
+
+
 Eigenständiger Python-OCPP-1.6J-Client auf Basis von The Mobility House.
 Eine OCPP-WebSocket-Verbindung (Master) mit 1 bis 20 einzeln bedienbaren
 Connectoren (Master=Connector 1, Slaves=Connector 2..N). Die lokale GUI ist
