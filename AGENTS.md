@@ -1,5 +1,13 @@
 # ChargeVisor Business – verbindliche Entwicklungsregeln
 
+## OCPP-Ladezustandsanzeige und Diagnose (23.11.2026, vor Deployment)
+
+- **Nur eine konsistente Frontend-Zustandslogik** für jeden einzelnen Connector: OCPP-Connectorstatus, aktive nicht simulierte Transaktion, `remote_paused`, Rollenrecht und Verbindung gemeinsam prüfen. Keine Ableitung des Zustands eines Slave-Connectors vom Master. Bestehende Lumina-Bilder, LEDs, Kundenwechsel, Nutzer-/RFID-/Historienansichten unverändert erhalten.
+- **Buttons:** Lädt → ausschließlich Pause. Erfolgreich remote pausiert und nicht mehr `Charging` → Play/Fortsetzen + Stop. Kein aktiver Ladevorgang und physischer `Preparing`/`SuspendedEV(SE)`/`Finishing` → Play; `Finishing` darf eine RemoteStart-Anfrage nur bei explizitem Nutzerklick auslösen, die Wallbox kann sie ablehnen. Bei `Available`/offline kein falsches Startversprechen. Datenbank `remote_paused=true` darf einen gemeldeten Status `Charging` nicht als erfolgreich pausiert ausgeben; Pause bei Widerspruch erneut möglich.
+- **Diagnose ist ausschließlich lesend:** `GetCompositeSchedule` wird erst nach aktiver Superadmin-Aktion auf einem konkret gewählten **physischen** Ladepunkt gesendet. Keine automatische Statusabfrage, kein Löschen/Ändern von Ladeprofilen, keine mutmaßliche Profilursache behaupten. `Rejected`, `NotSupported`, fehlender Plan, Stromangaben in `A` oder `W` klar unterscheiden.
+- **Keine Produktivänderung während des laufenden 120-Minuten-Simulatortests.** Änderungen zunächst nur auf separatem DEV-Feature-Branch/Draft-PR entwickeln und CI prüfen. Erst nach ausgewerteten Testberichten und ausdrücklicher Freigabe nach Render/privates Repo übernehmen.
+
+
 Diese Datei gilt für Coding-Agenten und alle zukünftigen Codeänderungen.
 
 ## Bestehende Funktionen NICHT entfernen
