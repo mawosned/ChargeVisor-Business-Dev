@@ -19,9 +19,9 @@ if ($LASTEXITCODE -ne 0) {
     if ($LASTEXITCODE -ne 0) { throw 'GitHub-Anmeldung fehlgeschlagen' }
 }
 $files = @('desktop_simulator.py', 'chain_simulator.py', 'smart_charging.py',
-    'ocpp_coverage.py', 'ocpp_test_console.py', 'ocpp_soak.py', 'paced_plan.py', 'backend_verifier.py', 'requirements.txt',
+    'ocpp_coverage.py', 'ocpp_test_console.py', 'ocpp_soak.py', 'paced_plan.py', 'backend_verifier.py', 'firmware_lifecycle.py', 'power_cycle_scenario.py', 'requirements.txt',
     'test_chain_simulator.py', 'test_advanced_ocpp.py',
-    'test_smart_charging.py', 'test_coverage.py', 'test_soak.py', 'test_paced_plan.py', 'test_tk_master.py', 'test_backend_verifier.py',
+    'test_smart_charging.py', 'test_coverage.py', 'test_soak.py', 'test_paced_plan.py', 'test_tk_master.py', 'test_backend_verifier.py', 'test_firmware_lifecycle.py', 'test_power_cycle_scenario.py',
     'START-SIMULATOR.cmd', 'start-local.ps1', 'README.md')
 $stage = Join-Path $env:TEMP ('CV-ocpp-update-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $stage -Force | Out-Null
@@ -51,10 +51,10 @@ try {
 
     Push-Location $stage
     try {
-        & $python -m py_compile chain_simulator.py smart_charging.py ocpp_coverage.py ocpp_test_console.py ocpp_soak.py paced_plan.py backend_verifier.py desktop_simulator.py
+        & $python -m py_compile chain_simulator.py smart_charging.py ocpp_coverage.py ocpp_test_console.py ocpp_soak.py paced_plan.py backend_verifier.py firmware_lifecycle.py power_cycle_scenario.py desktop_simulator.py
         if ($LASTEXITCODE -ne 0) { throw 'Syntaxpruefung fehlgeschlagen. Alte Dateien unveraendert.' }
         # py_compile alone does NOT detect imports of missing Python modules.
-        & $python -c "import paced_plan, backend_verifier, ocpp_soak, ocpp_test_console, desktop_simulator; print('Import-Check OK')"
+        & $python -c "import paced_plan, backend_verifier, firmware_lifecycle, power_cycle_scenario, ocpp_soak, ocpp_test_console, desktop_simulator; print('Import-Check OK')"
         if ($LASTEXITCODE -ne 0) { throw 'Importpruefung fehlgeschlagen. Alte Dateien unveraendert.' }
         # Fail closed: all tests must pass BEFORE copying over a working installation.
         & $python -m unittest discover -s . -p 'test_*.py' -v
@@ -87,7 +87,7 @@ try {
             Copy-Item -LiteralPath (Join-Path $stage $name) -Destination $dest -Force
         }
         # Verify that every critical file actually reached the live simulator folder.
-        foreach ($name in @('paced_plan.py', 'backend_verifier.py', 'ocpp_soak.py', 'desktop_simulator.py', 'smart_charging.py')) {
+        foreach ($name in @('paced_plan.py', 'backend_verifier.py', 'firmware_lifecycle.py', 'power_cycle_scenario.py', 'ocpp_soak.py', 'desktop_simulator.py', 'smart_charging.py')) {
             if (-not (Test-Path -LiteralPath (Join-Path $dir $name))) {
                 throw "Installation unvollstaendig: $name wurde nicht kopiert."
             }
