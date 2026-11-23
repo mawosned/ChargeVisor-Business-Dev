@@ -7,6 +7,7 @@ import {chargingReport} from './charging-report.mjs';
 import {applyLuminaFreecharge,handleFreechargeConfiguration} from './freecharge.mjs';
 import {validateOcppCsmsCommand,validateOcppCsmsResponse} from './ocpp-command-catalog.mjs';
 import {createOcppTestVerifier} from './ocpp-test-verifier.mjs';
+import {getPowerRecoveryStatus} from './ocpp-power-recovery.mjs';
 
 const now=()=>new Date().toISOString();
 const validId=id=>typeof id==='string'&&/^[-\w.:]{2,120}$/.test(id);
@@ -471,6 +472,14 @@ export function createOcppApi({pool,getActor,bridge,port,env}){
       if(!actor)return sendJSON(res,401,{error:'Nicht angemeldet'});
       const params=new URL(req.url,'http://localhost').searchParams;
       const tenantId=actor.role==='superadmin'?params.get('tenantId'):actor.tenant_id;
+      if(path==='/api/ocpp/power-recovery'&&req.method==='GET'){
+        if(!validUuid(tenantId))return sendJSON(res,400,{error:'Kunde auswählen'});
+        const rawLimit=params.get('limit')||'100';
+        const limit=Number(rawLimit);
+        if(!/^\d{1,3}$/.test(rawLimit)||!Number.isInteger(limit)||limit<1||limit>100)
+          return sendJSON(res,400,{error:'Ungültiges Limit'});
+        return sendJSON(res,200,await getPowerRecoveryStatus(pool,actor,tenantId,{limit}));
+      }
       if(path==='/api/ocpp/test-command'&&req.method==='POST'){
         // Disabled in production unless deliberately enabled. Never send an
         // arbitrary OCPP command to a real/customer charger from this route.
