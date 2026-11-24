@@ -858,10 +858,17 @@ body{background:linear-gradient(152deg,#f4f8f6 0%,#eff5f3 38%,#eaf2ef 100%);colo
   .cv-business .cv-overview-sites .health-site-row { flex-wrap: wrap; }
 }
 
-/* User-approved premium invitation: scoped to user management only. */
+/* User-approved shared premium button appearance; keep compact charging icons. */
 .cv-business .cv-premium-invite-wrap{position:relative;display:inline-flex;align-items:center;outline-offset:3px}
-.cv-business #inviteBtn.cv-premium-invite{background:linear-gradient(115deg,#087c85 0%,#0b9c86 55%,#16a56f 100%);border:1px solid #0d8979;color:#fff;opacity:1}
-.cv-business #inviteBtn.cv-premium-invite:hover,.cv-business #inviteBtn.cv-premium-invite:focus-visible{background:linear-gradient(115deg,#086770,#078774 55%,#128857);color:#fff}
-.cv-business #inviteBtn.cv-premium-invite:disabled{opacity:.65}
+.cv-business :is(#inviteBtn,#downloadChargingReport,.cv-control).cv-premium-invite{background:linear-gradient(115deg,#087c85 0%,#0b9c86 55%,#16a56f 100%);border:1px solid #0d8979;color:#fff;opacity:1}
+.cv-business :is(#inviteBtn,#downloadChargingReport,.cv-control).cv-premium-invite:hover,.cv-business :is(#inviteBtn,#downloadChargingReport,.cv-control).cv-premium-invite:focus-visible{background:linear-gradient(115deg,#086770,#078774 55%,#128857);color:#fff}
+.cv-business :is(#inviteBtn,#downloadChargingReport,.cv-control).cv-premium-invite:disabled{opacity:.65}
 .cv-business .cv-premium-invite-tip{display:none;position:absolute;top:calc(100% + 8px);right:0;width:min(285px,75vw);z-index:20;border:1px solid #cbded9;border-radius:8px;background:#fff;color:#17483e;padding:10px 12px;box-shadow:0 6px 22px #173a3520;font-size:12px;line-height:1.45;white-space:normal;text-align:left}
 .cv-business .cv-premium-invite-wrap:hover .cv-premium-invite-tip,.cv-business .cv-premium-invite-wrap:focus-within .cv-premium-invite-tip{display:block}
+
+/* Only premium actions: retain the reference invitation styling and existing control dimensions. */
+.cv-business .cv-session-exports #downloadChargingReport.cv-premium-invite span{color:#fff;margin-right:0}
+.cv-business .cv-control.cv-premium-invite:not(.cv-control-reset){border-radius:7px}
+.cv-business .cv-point-controls .cv-control.cv-premium-invite{display:inline-flex;align-items:center;justify-content:center;gap:1px}
+.cv-business .cv-point-controls .cv-control.cv-premium-invite svg{width:12px;height:12px;flex:none}
+.cv-business .cv-point-controls .cv-control.cv-premium-invite .cv-premium-star{font-size:8px;line-height:1;flex:none}

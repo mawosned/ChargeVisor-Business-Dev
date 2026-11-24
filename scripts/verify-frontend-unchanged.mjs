@@ -7,6 +7,7 @@
  * only changed DOM values instead of reloading the Lumina/chart/customer view. The other 13
  * exact visual/HTML/CSS/logo/export fingerprints remain frozen below.
  * 24 Nov: user-approved management-only RFID list, filter and premium invite styling.
+ * 24 Nov: user-approved shared premium action styling only (invite, PDF, charging and reset).
  * All other 12 protected files remain byte-identical.
  * No design, CSS, HTML, JS application logic, branding or existing export changes
  * may silently enter backend/OCPP pull requests.
@@ -25,13 +26,13 @@ import {dirname,resolve} from 'node:path';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const baseline='4f122a6d41338c017848b8270e3b769817366766';
 const files=Object.freeze({
-  'app-live.js':'b7ab1144854e10126eb77d530a9e9c1786ff4526',
+  'app-live.js':'1aea180df6297c2ebadd6d6a3735ce32f05def24',
   'app.html':'fbfac4c3427459aa64e4613cac02cc935b6eefc4',
   'app.js':'72eb69d35fb9b24e60a019bf098dc9c95fbb7aba',
   'index.html':'0415537962bbe745eb4edb864dc0632ba8d93cbd',
   'login.html':'14a8bc01e3d198651aa37846b29e0d1fdf91f0f7',
   'login.js':'259677446a0a96c1116654bcd704aa3454493abf',
-  'styles.css':'f05aa14abf310b98227ed803939176d4681a47a0',
+  'styles.css':'3e01daeec8aac7d35c0f8496fcc3222c39905688',
   'portal-language.js':'dcc00d5bb54434cab960103819d6074941179c7b',
   'exports.js':'79a20c6bd8366d4d9f3d8135b0d0ca8f902e51e3',
   'assets/blitz-bolt.svg':'afd4e3212eb5cf3f99a4a915e16fd46775e89d1d',

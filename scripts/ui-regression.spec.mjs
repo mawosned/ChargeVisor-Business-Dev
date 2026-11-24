@@ -280,6 +280,10 @@ test('Customer admin filters charging history, exports files and sees the PDF ac
     }
   }
   await expect(page.locator('#downloadChargingReport')).toHaveAttribute('aria-disabled','true');
+  await expect(page.locator('#downloadChargingReport')).toHaveCSS('background-image',/linear-gradient\(115deg, rgb\(8, 124, 133\)/);
+  await expect(page.locator('#downloadChargingReport .cv-premium-star')).toHaveText('★');
+  await expect(page.locator('[data-session-export="CSV"]')).toHaveCSS('background-image','none');
+  await expect(page.locator('[data-session-export="XLSX"]')).toHaveCSS('background-image','none');
   await page.locator('#downloadChargingReport').press('Enter');
   await expect(page.getByRole('dialog')).toContainText('Kontaktiere Walectra');
   if(process.env.CHARGEVISOR_REVIEW_DIR){
@@ -429,10 +433,15 @@ test('Reference layout renders actual states and retains the pause, resume and c
   // User-approved control sequence: while charging ONLY Pause; after a
   // confirmed Pause exactly Resume + Stop, with Stop requiring confirmation.
   await expect(stateOne.locator('.cv-point-controls button')).toHaveCount(1);
-  await stateOne.getByRole('button',{name:'Ladevorgang pausieren'}).click();
+  const pauseButton=stateOne.getByRole('button',{name:'Ladevorgang pausieren'});
+  await expect(pauseButton).toHaveCSS('background-image',/linear-gradient\(115deg, rgb\(8, 124, 133\)/);
+  await expect(pauseButton.locator('.cv-premium-star')).toHaveText('★');
+  await expect(pauseButton).toHaveCSS('width','26px');
+  await pauseButton.click();
   await expect(stateOne.locator('.cv-point-status')).toContainText('Pausiert');
   await expect(stateOne.locator('.cv-point-controls button')).toHaveCount(2);
   await expect(stateOne.locator('.cv-point-controls button').first()).toHaveAttribute('aria-label','Ladevorgang fortsetzen');
+  await expect(stateOne.locator('.cv-point-controls .cv-premium-star')).toHaveCount(2);
   await stateOne.getByRole('button',{name:'Ladevorgang stoppen'}).click();
   await expect(page.getByRole('dialog')).toContainText('wirklich stoppen?');
   expect(stopConfirmed).toBe(false);
@@ -545,6 +554,8 @@ test('Admin manages RFID and creates a basic profile without premium portal acce
   await page.locator('#nav [data-page="user-management"]').click();
   await expect(page.locator('#createUserBtn')).toBeEnabled();
   await expect(page.locator('#inviteBtn')).toHaveAttribute('aria-disabled','true');
+  await expect(page.locator('#inviteBtn')).toHaveCSS('background-image', /linear-gradient/);
+  await expect(page.locator('#createUserBtn')).toHaveCSS('background-image','none');
   await page.locator('#inviteBtn').hover();
   await expect(page.locator('#invitePremiumHint')).toBeVisible();
   await expect(page.locator('.rfid-table')).toContainText('A5C8D0E1');
