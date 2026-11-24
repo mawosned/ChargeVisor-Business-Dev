@@ -76,7 +76,14 @@ try{
   const [credentials]=station.credentials;
   const connector=station.points[0].id;
   const admin=await register(superadmin,tenant.id,'admin');
+  // Basic tenant-local driver creation and point access must not depend on premium portal invitations.
+  const driverEmail='rfid-only-'+randomUUID()+'@chargevisor.test';
+  const driver=await post('/api/users',admin.cookie,{name:'RFID-only driver',email:driverEmail,pointIds:station.points.map(p=>p.id)});
+  assert.equal(driver.portal_enabled,false);
+  assert.equal(driver.addedPoints,2);
+  await post('/api/invitations',admin.cookie,{name:'RFID-only driver',email:driverEmail,role:'user',pointIds:[connector]},403);
   const owner=await register(superadmin,tenant.id,'user',[connector]);
+  await post('/api/users',owner.cookie,{name:'Forbidden driver',email:'forbidden-'+randomUUID()+'@chargevisor.test',pointIds:[connector]},403);
   const other=await register(superadmin,tenant.id,'user',[station.points[1].id]);
   for(const allowed of [true,false]){
     const grant=await request('/api/points/'+connector+'/access',{method:'PUT',cookie:admin.cookie,
@@ -99,7 +106,11 @@ try{
   assert.ok(detected.id&&detected.last_seen);
   assert.equal(detected.station_name,'Test-Master');
   assert.equal(detected.point_id,null);
-  assert.ok(!JSON.stringify(detected).includes(recentCard));
+  assert.equal(detected.id_tag,recentCard);
+  assert.ok(!('tag_hash' in detected)&&!('tag_cipher' in detected));
+  const storedRead=(await pool.query('SELECT tag_cipher,tag_hash FROM cv_rfid_recent_reads WHERE id=$1',[detected.id])).rows[0];
+  assert.ok(storedRead.tag_cipher&&!JSON.stringify(storedRead).includes(recentCard));
+  await request(rfid,{cookie:owner.cookie,status:403});
   assert.equal((await call(socket,'StartTransaction',deniedStart))[2].idTagInfo.status,'Invalid');
   assert.equal((await call(socket,'Authorize',{idTag:recentCard}))[2].idTagInfo.status,'Invalid');
   const {recent:[withConnector]}=(await request(rfid,{cookie:admin.cookie})).data;
@@ -115,6 +126,7 @@ try{
   const assigned=await post(rfid,admin.cookie,seenAssignment,200);
   assert.equal(assigned.recent.length,0);
   assert.equal(assigned.cards[0].label,'Erkannte Testkarte');
+  assert.equal(assigned.cards[0].id_tag,recentCard);
   await post(rfid,admin.cookie,seenAssignment,409);
   const resultingAccess=await request('/api/points',{cookie:other.cookie});
   assert.deepEqual(new Set(resultingAccess.data.points.map(p=>p.id)),new Set(station.points.map(p=>p.id)));
@@ -129,8 +141,14 @@ try{
   assert.equal(confirmed.window,null);
   const enrolled=confirmed.cards.find(item=>item.label==='Pilotkarte');
   assert.ok(enrolled);
+  assert.equal(enrolled.id_tag,card);
+  assert.ok(!('tag_hash' in enrolled)&&!('tag_cipher' in enrolled));
+  // A legacy hash-only card recovers its display ID on the next successful scan.
+  await pool.query('UPDATE cv_rfid_cards SET tag_cipher=NULL WHERE id=$1',[enrolled.id]);
+  assert.equal((await request(rfid,{cookie:admin.cookie})).data.cards.find(x=>x.id===enrolled.id).id_tag,null);
   assert.equal((await call(socket,'Authorize',{idTag:'CV-SIM-TEST'}))[2].idTagInfo.status,'Invalid');
   assert.equal((await call(socket,'Authorize',{idTag:card}))[2].idTagInfo.status,'Accepted');
+  assert.equal((await request(rfid,{cookie:admin.cookie})).data.cards.find(x=>x.id===enrolled.id).id_tag,card);
   const tariffPath='/api/tenants/'+tenant.id+'/tariff';
   await request(tariffPath,{method:'PUT',cookie:admin.cookie,body:{pricePerKwh:0.30}});
   const time=new Date().toISOString();
