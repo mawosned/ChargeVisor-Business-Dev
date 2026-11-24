@@ -8,7 +8,7 @@
  * exact visual/HTML/CSS/logo/export fingerprints remain frozen below.
  * 24 Nov: user-approved management-only RFID list, filter and premium invite styling.
  * 24 Nov: user-approved shared premium action styling only (invite, PDF, charging and reset).
- * All other 12 protected files remain byte-identical.
+ * 24 Nov: approved favicon / home-screen icon metadata and four new PNGs only.
  * No design, CSS, HTML, JS application logic, branding or existing export changes
  * may silently enter backend/OCPP pull requests.
  *
@@ -27,14 +27,19 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const baseline='4f122a6d41338c017848b8270e3b769817366766';
 const files=Object.freeze({
   'app-live.js':'1aea180df6297c2ebadd6d6a3735ce32f05def24',
-  'app.html':'fbfac4c3427459aa64e4613cac02cc935b6eefc4',
+  'app.html':'515eb3466bb0aa8e02cd6eb9a6286c3e42bead01',
   'app.js':'72eb69d35fb9b24e60a019bf098dc9c95fbb7aba',
-  'index.html':'0415537962bbe745eb4edb864dc0632ba8d93cbd',
-  'login.html':'14a8bc01e3d198651aa37846b29e0d1fdf91f0f7',
+  'index.html':'da82378bf7aa2e4a180f6a414ca62f97d5a41bb0',
+  'login.html':'0bd2264014111d1e2a194d2503787d8c68a867ad',
   'login.js':'259677446a0a96c1116654bcd704aa3454493abf',
   'styles.css':'3e01daeec8aac7d35c0f8496fcc3222c39905688',
   'portal-language.js':'dcc00d5bb54434cab960103819d6074941179c7b',
   'exports.js':'79a20c6bd8366d4d9f3d8135b0d0ca8f902e51e3',
+  'manifest.webmanifest':'25f5a43e8891ffb8ba8a5c95f8bd1ff344fb48a6',
+  'assets/favicon-32.png':'0cd48a8af91bcc6f9290685df2c106a439389716',
+  'assets/apple-touch-icon.png':'e7cfcafa97678f86916f6f20e15ebabf5a2a3948',
+  'assets/app-icon-192.png':'137962970adfd3f397bb2d4fcaec8fbddd69b7f3',
+  'assets/app-icon-512.png':'61f6c3cccd48b74703c25d65ba0f19909df0a5a6',
   'assets/blitz-bolt.svg':'afd4e3212eb5cf3f99a4a915e16fd46775e89d1d',
   'assets/chargevisor-logo.svg':'b6f8ac85be4f6f4d1a08ee035249d861d4117bb2',
   'assets/login-wallbox.webp':'82e57107802b1bf6c6ed13aacd0fe04c569e2ecb',
@@ -45,7 +50,7 @@ const files=Object.freeze({
 function gitBlobSha(bytes){
   return createHash('sha1').update('blob '+bytes.length+'\0').update(bytes).digest('hex');
 }
-const actualRoots=(await readdir(root)).filter(name=>/\.(?:html|css|js)$/.test(name)).sort();
+const actualRoots=(await readdir(root)).filter(name=>/\.(?:html|css|js|webmanifest)$/.test(name)).sort();
 const expectedRoots=Object.keys(files).filter(name=>!name.includes('/')).sort();
 assert.deepEqual(actualRoots,expectedRoots,
   'New/removed frontend root file detected. V1 UI may not be modified in backend PRs');

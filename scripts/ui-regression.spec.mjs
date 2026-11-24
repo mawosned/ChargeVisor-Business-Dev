@@ -575,3 +575,31 @@ test('Admin manages RFID and creates a basic profile without premium portal acce
   expect(createPayload.pointIds).toHaveLength(2);
   expect(createPayload).not.toHaveProperty('canInviteUsers');
 });
+
+test('ChargeVisor shortcut metadata and real PNG assets are served without login',async({request})=>{
+  for(const route of ['/','/login','/app']){
+    const response=await request.get('http://127.0.0.1:10000'+route);
+    expect(response.status()).toBe(200);
+    const html=await response.text();
+    expect(html).toContain('<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">');
+    expect(html).toContain('<link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">');
+    expect(html).toContain('<link rel="manifest" href="/manifest.webmanifest">');
+  }
+  const response=await request.get('http://127.0.0.1:10000/manifest.webmanifest');
+  expect(response.status()).toBe(200);
+  expect(response.headers()['content-type']).toContain('application/manifest+json');
+  const manifest=await response.json();
+  expect(manifest.short_name).toBe('ChargeVisor');
+  expect(manifest.start_url).toBe('/app');
+  expect(manifest.display).toBe('standalone');
+  expect(manifest.icons.map(x=>x.sizes)).toEqual(['192x192','512x512']);
+  for(const [path,size] of [['/assets/favicon-32.png',32],['/assets/apple-touch-icon.png',180],['/assets/app-icon-192.png',192],['/assets/app-icon-512.png',512],['/favicon.ico',32],['/apple-touch-icon.png',180]]){
+    const icon=await request.get('http://127.0.0.1:10000'+path);
+    expect(icon.status()).toBe(200);
+    expect(icon.headers()['content-type']).toContain('image/png');
+    const bytes=await icon.body();
+    expect(bytes.subarray(0,8).toString('hex')).toBe('89504e470d0a1a0a');
+    expect(bytes.readUInt32BE(16)).toBe(size);
+    expect(bytes.readUInt32BE(20)).toBe(size);
+  }
+});

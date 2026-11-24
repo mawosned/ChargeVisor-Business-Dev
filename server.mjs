@@ -26,6 +26,13 @@ const files = {
   '/assets/lumina-thumb.svg': ['assets/lumina-thumb.svg', 'image/svg+xml'],
   '/assets/chargevisor-logo.svg': ['assets/chargevisor-logo.svg', 'image/svg+xml'],
   '/assets/walectra-logo.webp': ['assets/walectra-logo.webp', 'image/webp'],
+  '/favicon.ico': ['assets/favicon-32.png', 'image/png'],
+  '/apple-touch-icon.png': ['assets/apple-touch-icon.png', 'image/png'],
+  '/assets/favicon-32.png': ['assets/favicon-32.png', 'image/png'],
+  '/assets/apple-touch-icon.png': ['assets/apple-touch-icon.png', 'image/png'],
+  '/assets/app-icon-192.png': ['assets/app-icon-192.png', 'image/png'],
+  '/assets/app-icon-512.png': ['assets/app-icon-512.png', 'image/png'],
+  '/manifest.webmanifest': ['manifest.webmanifest', 'application/manifest+json; charset=utf-8'],
 };
 
 const port = Number(process.env.PORT || 10000);

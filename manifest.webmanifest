@@ -1,0 +1,24 @@
+{
+  "id": "/",
+  "name": "ChargeVisor Business",
+  "short_name": "ChargeVisor",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#071b1b",
+  "icons": [
+    {
+      "src": "/assets/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
