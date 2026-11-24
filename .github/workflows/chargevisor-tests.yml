@@ -114,3 +114,50 @@ jobs:
           name: chargevisor-ui-regression
           path: ui-regression-lumina.png
           if-no-files-found: ignore
+
+  physical-rfid-admin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: chargevisor_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d chargevisor_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      CV_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/chargevisor_ci
+      CV_PUBLIC_URL: http://127.0.0.1:10000
+      CV_BOOTSTRAP_EMAIL: ci@chargevisor.test
+      CV_BOOTSTRAP_PASSWORD: CI-Dedicated-Only-Password-2026!
+      CV_RFID_HMAC_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      PORT: '10000'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install backend without postinstall
+        run: npm ci --ignore-scripts
+      - name: Bootstrap isolated database and server
+        run: |
+          CV_INIT_DB=1 node backend/setup.mjs
+          node server.mjs >/tmp/chargevisor-physical-ci.log 2>&1 &
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:10000/health >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/chargevisor-physical-ci.log
+          exit 1
+      - name: Actual physical RFID and basic admin account regression against disposable PostgreSQL
+        run: node scripts/physical-ocpp-ci.mjs
+      - name: Server diagnostics on failure
+        if: failure()
+        run: tail -n 150 /tmp/chargevisor-physical-ci.log || true
