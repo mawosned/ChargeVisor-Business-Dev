@@ -60,6 +60,7 @@ async function mockBackend(page,role='superadmin',topology='shared'){
       }
     }
     else if(path==='/api/users')data={users:[]};
+    else if(path==='/api/ocpp/rfid')data={configured:true,cards:[],recent:[]};
     else if(path==='/api/ocpp/analytics')data={buckets:[],sessions:[]};
     else if(path==='/api/ocpp/sessions')data={sessions:[]};
     else if(path==='/api/invitations')data={invitations:[]};
@@ -517,4 +518,49 @@ test('Live polling keeps existing Lumina, customer selector and chart DOM while 
   });
   for(const [part,preserved] of Object.entries(identities))
     expect(preserved,part+' must not flash/recreate on poll').toBe(true);
+});
+
+test('Admin manages RFID and creates a basic profile without premium portal access',async({page})=>{
+  await mockBackend(page,'admin');
+  const driverId='77777777-7777-4777-8777-777777777777',cardId='88888888-8888-4888-8888-888888888888';
+  let users=[{id:driverId,name:'RFID Fahrer',email:'driver@example.test',role:'user',enabled:true,portal_enabled:false}];
+  let card={id:cardId,user_id:driverId,label:'Testkarte',id_tag:'A5C8D0E1',enabled:true};
+  let createPayload=null,cardPayload=null;
+  await page.route('**/api/users**',async route=>{
+    if(route.request().method()==='POST'){
+      createPayload=route.request().postDataJSON();
+      users.push({id:'99999999-9999-4999-8999-999999999999',name:createPayload.name,email:createPayload.email,role:'user',enabled:true,portal_enabled:false});
+      return route.fulfill({status:201,json:users.at(-1)});
+    }
+    return route.fulfill({json:{users}});
+  });
+  await page.route('**/api/ocpp/rfid**',async route=>{
+    if(route.request().method()==='POST'){
+      cardPayload=route.request().postDataJSON();
+      card={...card,enabled:cardPayload.enabled};
+    }
+    return route.fulfill({json:{configured:true,cards:[card],recent:[]}});
+  });
+  await page.goto('http://127.0.0.1:10000/app');
+  await page.locator('#nav [data-page="user-management"]').click();
+  await expect(page.locator('#createUserBtn')).toBeEnabled();
+  await expect(page.locator('#inviteBtn')).toHaveAttribute('aria-disabled','true');
+  await page.locator('#inviteBtn').hover();
+  await expect(page.locator('#invitePremiumHint')).toBeVisible();
+  await expect(page.locator('.rfid-table')).toContainText('A5C8D0E1');
+  await page.locator('#searchInput').fill('A5C8D0E1');
+  await expect(page.locator('#content table').first()).toContainText('RFID Fahrer');
+  await page.locator('[data-inline-rfid-card]').click();
+  await expect(page.locator('.rfid-table')).toContainText('Gesperrt');
+  expect(cardPayload).toMatchObject({action:'set-enabled',cardId,enabled:false});
+  await page.locator('#searchInput').fill('');
+  await page.locator('#createUserBtn').click();
+  await page.locator('#newDriverName').fill('Neuer Fahrer');
+  await page.locator('#newDriverEmail').fill('new@example.test');
+  await page.locator('input[name="pointIds"]').nth(0).check();
+  await page.locator('input[name="pointIds"]').nth(1).check();
+  await page.locator('#pilotForm button[type="submit"]').click();
+  await expect(page.locator('#content table').first()).toContainText('Neuer Fahrer');
+  expect(createPayload.pointIds).toHaveLength(2);
+  expect(createPayload).not.toHaveProperty('canInviteUsers');
 });

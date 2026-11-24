@@ -1,4 +1,4 @@
-import {createHmac,randomUUID} from 'node:crypto';
+import {createHmac,randomUUID,randomBytes,createCipheriv,createDecipheriv} from 'node:crypto';
 import {updateUserPointAccess} from './auth.mjs';
 import {FREECHARGE_TAG,freechargeGrant} from './freecharge.mjs';
 import {validUuid} from './test-rfid.mjs';
@@ -45,6 +45,8 @@ export async function ensurePhysicalOcppSchema(pool){
       UNIQUE (tenant_id,tag_hash),
       FOREIGN KEY (station_id,tenant_id) REFERENCES cv_stations(id,tenant_id) ON DELETE CASCADE
     );
+    ALTER TABLE cv_rfid_cards ADD COLUMN IF NOT EXISTS tag_cipher text;
+    ALTER TABLE cv_rfid_recent_reads ADD COLUMN IF NOT EXISTS tag_cipher text;
     CREATE INDEX IF NOT EXISTS cv_rfid_recent_order_idx
       ON cv_rfid_recent_reads (tenant_id,last_seen DESC,id DESC);
     CREATE INDEX IF NOT EXISTS cv_rfid_recent_expiry_idx ON cv_rfid_recent_reads (last_seen);
@@ -95,13 +97,13 @@ const recentStation=`
   JOIN cv_stations s ON s.id=q.station_id AND s.tenant_id=q.tenant_id AND NOT s.is_simulator
   JOIN cv_ocpp_credentials c ON c.identity=q.identity AND c.station_id=s.id AND c.tenant_id=s.tenant_id`;
 
-async function rememberRead(client,ctx,digest,connectorId){
+async function rememberRead(client,ctx,digest,connectorId,cipher){
   if(ctx.simulated)return false;
   // Multiple chargers can report at once. Bound a tenant's queue across connections.
   await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',['cv-rfid-recent:'+ctx.tenantId]);
   const remembered=await client.query(`
-    INSERT INTO cv_rfid_recent_reads AS q(id,tenant_id,station_id,identity,connector_id,tag_hash,last_seen)
-    SELECT $1,c.tenant_id,c.station_id,c.identity,$5,$6,now()
+    INSERT INTO cv_rfid_recent_reads AS q(id,tenant_id,station_id,identity,connector_id,tag_hash,last_seen,tag_cipher)
+    SELECT $1,c.tenant_id,c.station_id,c.identity,$5,$6,now(),$7
     FROM cv_ocpp_credentials c
     JOIN cv_stations s ON s.id=c.station_id AND s.tenant_id=c.tenant_id
     JOIN cv_tenants t ON t.id=c.tenant_id
@@ -112,8 +114,8 @@ async function rememberRead(client,ctx,digest,connectorId){
       id=CASE WHEN q.last_seen<${recentCutoff} THEN EXCLUDED.id ELSE q.id END,
       connector_id=CASE WHEN EXCLUDED.connector_id IS NOT NULL THEN EXCLUDED.connector_id
         WHEN q.last_seen>=${recentCutoff} AND q.identity=EXCLUDED.identity AND q.station_id=EXCLUDED.station_id THEN q.connector_id END,
-      station_id=EXCLUDED.station_id,identity=EXCLUDED.identity,last_seen=EXCLUDED.last_seen
-    RETURNING id`,[randomUUID(),ctx.tenantId,ctx.stationId,ctx.identity,connectorId,digest]);
+      station_id=EXCLUDED.station_id,identity=EXCLUDED.identity,last_seen=EXCLUDED.last_seen,tag_cipher=EXCLUDED.tag_cipher
+    RETURNING id`,[randomUUID(),ctx.tenantId,ctx.stationId,ctx.identity,connectorId,digest,cipher]);
   if(!remembered.rowCount)return false;
   await client.query(`
     DELETE FROM cv_rfid_recent_reads WHERE id IN (
@@ -133,6 +135,33 @@ export function createPhysicalOcpp(pool,env){
   const configured=key.length===32;
   const windows=new Map();
   const tagHash=tag=>createHmac('sha256',key).update(tag).digest('hex');
+  // Preserve HMAC authorization; a separate derived key protects the display-only idTag.
+  const displayKey=createHmac('sha256',key).update('chargevisor-rfid-display-v1').digest();
+  const seal=(tag,tenantId,digest)=>{
+    const iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',displayKey,iv);
+    cipher.setAAD(Buffer.from(tenantId+':'+digest));
+    const data=Buffer.concat([cipher.update(tag,'utf8'),cipher.final()]);
+    return [iv,cipher.getAuthTag(),data].map(x=>x.toString('base64url')).join('.');
+  };
+  const reveal=(encoded,tenantId,digest)=>{
+    if(!configured||!encoded)return null;
+    try{
+      const [iv,authTag,data]=encoded.split('.').map(x=>Buffer.from(x,'base64url'));
+      const decipher=createDecipheriv('aes-256-gcm',displayKey,iv);
+      decipher.setAAD(Buffer.from(tenantId+':'+digest));
+      decipher.setAuthTag(authTag);
+      const tag=Buffer.concat([decipher.update(data),decipher.final()]).toString('utf8');
+      return isCardTag(tag)&&tagHash(tag)===digest?tag:null;
+    }catch{return null;}
+  };
+  async function rememberKnown(client,tenantId,digest,tag){
+    await client.query('UPDATE cv_rfid_cards SET tag_cipher=$3 WHERE tenant_id=$1 AND tag_hash=$2 AND tag_cipher IS NULL',
+      [tenantId,digest,seal(tag,tenantId,digest)]);
+  }
+  const displayRow=(row,tenantId)=>{
+    const {tag_hash,tag_cipher,...rest}=row;
+    return {...rest,id_tag:reveal(tag_cipher,tenantId,tag_hash)};
+  };
   const scope=ctx=>[ctx.tenantId,ctx.stationId,ctx.identity];
 
   const remoteGrant=(ctx,tag)=>typeof tag==='string'&&/^CVR-[a-f0-9]{16}$/.test(tag)&&
@@ -143,8 +172,8 @@ export function createPhysicalOcpp(pool,env){
     if(!configured||!isCardTag(tag))return false;
     const digest=tagHash(tag);
     const result=await pool.query(tagAssignment+' LIMIT 1',[digest,...scope(ctx),null]);
-    if(result.rowCount)return true;
-    if(!await transaction(pool,client=>rememberRead(client,ctx,digest,null)))return false;
+    if(result.rowCount){await rememberKnown(pool,ctx.tenantId,digest,tag);return true;}
+    if(!await transaction(pool,client=>rememberRead(client,ctx,digest,null,seal(tag,ctx.tenantId,digest))))return false;
     const open=windows.get(ctx.identity);
     if(open&&open.tenantId===ctx.tenantId&&open.stationId===ctx.stationId&&!open.candidate&&open.until>Date.now())
       open.candidate=tag;
@@ -178,9 +207,10 @@ export function createPhysicalOcpp(pool,env){
         (await client.query(tagAssignment+' LIMIT 1 FOR SHARE OF r,u,a,p,s,t',
           [digest,...scope(ctx),connectorId])).rows[0];
       if(!grant){
-        if(!freecharge&&!remote)await rememberRead(client,ctx,digest,connectorId);
+        if(!freecharge&&!remote)await rememberRead(client,ctx,digest,connectorId,seal(idTag,ctx.tenantId,digest));
         return {transactionId:0};
       }
+      if(!freecharge&&!remote)await rememberKnown(client,ctx.tenantId,digest,idTag);
       const {rows:[previous]}=await client.query(`
         SELECT id FROM cv_ocpp_transactions
         WHERE identity=$1 AND tenant_id=$2 AND connector_id=$3 AND NOT simulated
@@ -234,9 +264,9 @@ export function createPhysicalOcpp(pool,env){
 
   async function readCards(tenantId,actor,identity){
     const cards=await pool.query(
-      'SELECT id,user_id,label,enabled,created_at FROM cv_rfid_cards WHERE tenant_id=$1 ORDER BY created_at DESC',[tenantId]);
+      'SELECT id,user_id,label,enabled,created_at,tag_hash,tag_cipher FROM cv_rfid_cards WHERE tenant_id=$1 ORDER BY created_at DESC',[tenantId]);
     const recent=configured?await pool.query(`
-      SELECT q.id,s.name AS station_name,q.connector_id,p.id AS point_id,p.name AS point_name,q.last_seen
+      SELECT q.id,s.name AS station_name,q.connector_id,p.id AS point_id,p.name AS point_name,q.last_seen,q.tag_hash,q.tag_cipher
       FROM cv_rfid_recent_reads q ${recentStation}
       LEFT JOIN cv_chargepoints p ON p.tenant_id=q.tenant_id AND p.station_id=q.station_id
         AND p.ocpp_identity=q.identity AND p.connector_number=q.connector_id
@@ -245,7 +275,7 @@ export function createPhysicalOcpp(pool,env){
     const open=windows.get(identity);
     const window=open&&open.actorId===actor.id&&open.tenantId===tenantId&&open.until>Date.now()
       ?{expiresAt:new Date(open.until).toISOString(),candidate:open.candidate}:null;
-    return {cards:cards.rows,recent:recent.rows,window,configured};
+    return {cards:cards.rows.map(row=>displayRow(row,tenantId)),recent:recent.rows.map(row=>displayRow(row,tenantId)),window,configured};
   }
 
   async function assignSeen(tenantId,actor,input){
@@ -259,7 +289,7 @@ export function createPhysicalOcpp(pool,env){
         "SELECT id FROM cv_tenants WHERE id=$1 AND status='active' AND deleted_at IS NULL FOR SHARE",[tenantId]);
       if(!tenant.rowCount)return {status:403,error:'Kunde nicht freigeschaltet'};
       const {rows:[read]}=await client.query(`
-        SELECT q.tag_hash FROM cv_rfid_recent_reads q ${recentStation}
+        SELECT q.tag_hash,q.tag_cipher FROM cv_rfid_recent_reads q ${recentStation}
         WHERE q.id=$1 AND q.tenant_id=$2 AND q.last_seen>=${recentCutoff} AND ${unknownRead}
         FOR UPDATE OF q`,[readId,tenantId]);
       if(!read)return {status:409,error:'Diese RFID-Erkennung ist nicht mehr verfügbar'};
@@ -268,8 +298,8 @@ export function createPhysicalOcpp(pool,env){
       if(!user.rowCount)return {status:404,error:'Aktiver Nutzer nicht gefunden'};
       const cardId=randomUUID();
       const added=await client.query(`
-        INSERT INTO cv_rfid_cards(id,tenant_id,user_id,tag_hash,label) VALUES($1,$2,$3,$4,$5)
-        ON CONFLICT(tag_hash) DO NOTHING RETURNING id`,[cardId,tenantId,userId,read.tag_hash,label.trim()]);
+        INSERT INTO cv_rfid_cards(id,tenant_id,user_id,tag_hash,label,tag_cipher) VALUES($1,$2,$3,$4,$5,$6)
+        ON CONFLICT(tag_hash) DO NOTHING RETURNING id`,[cardId,tenantId,userId,read.tag_hash,label.trim(),read.tag_cipher??null]);
       if(!added.rowCount)return {status:409,error:'Diese RFID-Erkennung ist nicht mehr verfügbar'};
       if(allPoints||pointIds.length)
         await updateUserPointAccess(client,{tenantId,userId,allPoints,pointIds});
@@ -356,8 +386,8 @@ export function createPhysicalOcpp(pool,env){
           "SELECT id FROM cv_users WHERE id=$1 AND tenant_id=$2 AND enabled AND role='user' FOR SHARE",[userId,tenantId]);
         if(!user.rowCount)return 'user';
         const added=await client.query(`
-          INSERT INTO cv_rfid_cards(id,tenant_id,user_id,tag_hash,label) VALUES($1,$2,$3,$4,$5)
-          ON CONFLICT(tag_hash) DO NOTHING RETURNING id`,[cardId,tenantId,userId,tagHash(input.tag),input.label.trim()]);
+          INSERT INTO cv_rfid_cards(id,tenant_id,user_id,tag_hash,label,tag_cipher) VALUES($1,$2,$3,$4,$5,$6)
+          ON CONFLICT(tag_hash) DO NOTHING RETURNING id`,[cardId,tenantId,userId,tagHash(input.tag),input.label.trim(),seal(input.tag,tenantId,tagHash(input.tag))]);
         if(!added.rowCount)return 'duplicate';
         await client.query("INSERT INTO cv_audit(actor_id,tenant_id,action,target_id) VALUES($1,$2,'rfid_enrolled',$3)",
           [actor.id,tenantId,cardId]);

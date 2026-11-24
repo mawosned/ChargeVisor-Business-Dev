@@ -857,3 +857,11 @@ body{background:linear-gradient(152deg,#f4f8f6 0%,#eff5f3 38%,#eaf2ef 100%);colo
   .cv-business .cv-point-controls { flex: 0 0 auto; }
   .cv-business .cv-overview-sites .health-site-row { flex-wrap: wrap; }
 }
+
+/* User-approved premium invitation: scoped to user management only. */
+.cv-business .cv-premium-invite-wrap{position:relative;display:inline-flex;align-items:center;outline-offset:3px}
+.cv-business #inviteBtn.cv-premium-invite{background:linear-gradient(115deg,#087c85 0%,#0b9c86 55%,#16a56f 100%);border:1px solid #0d8979;color:#fff;opacity:1}
+.cv-business #inviteBtn.cv-premium-invite:hover,.cv-business #inviteBtn.cv-premium-invite:focus-visible{background:linear-gradient(115deg,#086770,#078774 55%,#128857);color:#fff}
+.cv-business #inviteBtn.cv-premium-invite:disabled{opacity:.65}
+.cv-business .cv-premium-invite-tip{display:none;position:absolute;top:calc(100% + 8px);right:0;width:min(285px,75vw);z-index:20;border:1px solid #cbded9;border-radius:8px;background:#fff;color:#17483e;padding:10px 12px;box-shadow:0 6px 22px #173a3520;font-size:12px;line-height:1.45;white-space:normal;text-align:left}
+.cv-business .cv-premium-invite-wrap:hover .cv-premium-invite-tip,.cv-business .cv-premium-invite-wrap:focus-within .cv-premium-invite-tip{display:block}
