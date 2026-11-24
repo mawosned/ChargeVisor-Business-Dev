@@ -38,8 +38,8 @@
     return labels.get(live.error_code)||(live.error_code&&live.error_code!=='NoError'?live.error_code:deviceStatus(point));
   }
   function controlButton(point,command,label,icon,allowed=canControl()){
-    return '<button type="button" class="btn ghost small cv-control cv-control-'+command+'" data-ocpp-control="'+command+
-      '" data-point-id="'+esc(point.id)+'" aria-label="'+label+'"'+(preview?' disabled':allowed?'':lockedAttrs)+'>'+icon+'</button>';
+    return '<button type="button" class="btn ghost small cv-control cv-premium-invite cv-control-'+command+'" data-ocpp-control="'+command+
+      '" data-point-id="'+esc(point.id)+'" aria-label="'+label+'"'+(preview?' disabled':allowed?'':lockedAttrs)+'>'+icon+' <span class="cv-premium-star" aria-hidden="true">★</span></button>';
   }
   const chargeControlIcon={
     start:'<path d="M4 2.7a.65.65 0 0 1 1-.55l8 5.3a.65.65 0 0 1 0 1.1l-8 5.3A.65.65 0 0 1 4 13.3z"/>',
@@ -867,8 +867,8 @@
       '<div class="cv-session-exports"><strong>Exportieren</strong>'+
       '<button class="btn ghost small" type="button" data-session-export="CSV" aria-label="CSV herunterladen"><span aria-hidden="true">▤</span> CSV</button>'+
       '<button class="btn ghost small" type="button" data-session-export="XLSX" aria-label="Excel herunterladen"><span aria-hidden="true">▦</span> Excel</button>'+
-      (state.role==='user'?'':'<button id="downloadChargingReport" type="button" class="btn small" aria-label="PDF-Ladebericht herunterladen"'+
-        (!canDownloadPdf()?lockedAttrs:'')+(preview?' disabled':'')+'><span aria-hidden="true">✦</span> PDF-Ladebericht</button>')+'</div>'+
+      (state.role==='user'?'':'<button id="downloadChargingReport" type="button" class="btn cv-premium-invite" aria-label="PDF-Ladebericht herunterladen"'+
+        (!canDownloadPdf()?lockedAttrs:'')+(preview?' disabled':'')+'>PDF-Ladebericht <span class="cv-premium-star" aria-hidden="true">★</span></button>')+'</div>'+
       '<div id="chargingHistory" aria-live="polite"></div>'+
       '<p class="inline-help cv-session-footer">Die Übersicht zeigt bis zu 100 Treffer. CSV und Excel enthalten alle Treffer. Zeitraum in Berliner Ortszeit.</p></section>'+
       (state.role==='super'&&testTools()?'<section class="panel panel-top-gap">'+
