@@ -238,9 +238,12 @@
       chargerIds:db.chargers.map(x=>x.id),state:'aktiv'}];
   }else{
     const qs='?tenantId='+encodeURIComponent(state.tenant);
-    const [data,users,invites,telemetry]=await Promise.all([
-      api('/api/structure/overview'+qs),api('/api/users'+qs),api('/api/invitations'+qs),api('/api/ocpp/live'+qs)
+    const [data,users,invites,telemetry,rfid]=await Promise.all([
+      api('/api/structure/overview'+qs),api('/api/users'+qs),api('/api/invitations'+qs),api('/api/ocpp/live'+qs),
+      preview?Promise.resolve(null):api('/api/ocpp/rfid'+qs).catch(()=>null)
     ]);
+    db.rfidStatus=rfid?rfid.configured?'ready':'unconfigured':preview?'preview':'unavailable';
+    db.tags=(rfid?.cards||[]).map(card=>({...card,tenant:state.tenant}));
     db.ocpp=(telemetry.live||[]).filter(x=>testTools()||!x.simulated);
     db.ocppConnectors=(telemetry.connectors||[]).filter(x=>testTools()||!x.simulated);
     db.transactions=telemetry.transactions||[];
@@ -755,17 +758,18 @@
 
   function userManagement(){
   const members=availablePeople();
-  const shown=members.filter(p=>(p.name+' '+p.email).toLowerCase().includes(state.query.toLowerCase()));
+  const matches=p=>availableTags().filter(card=>card.user_id===p.id);
+  const shown=members.filter(p=>[p.name,p.email,...matches(p).flatMap(card=>[card.id_tag,card.label])].join(' ').toLowerCase().includes(state.query.trim().toLowerCase()));
   const inviteLocked=!canInvite();
   let h=head('Nutzerverwaltung','Nutzerprofile verwalten und Ladepunkte zuweisen.',
     (state.role==='super'?'<button type="button" class="btn ghost" data-page="customers">Zurück zur Kundenverwaltung</button>':'')+
-    '<button class="btn ghost" id="createUserBtn" '+(preview||!state.tenant?'disabled':'')+'>+ Nutzer hinzufügen</button>'+
-    '<button class="btn" id="inviteBtn" '+(!state.tenant||preview?'disabled':inviteLocked?lockedAttrs:'')+'>+ Nutzer einladen</button>'+
+    '<button type="button" class="btn ghost" id="createUserBtn" '+(preview||!state.tenant?'disabled':'')+'>+ Nutzer hinzufügen</button>'+
+    '<span class="cv-premium-invite-wrap" tabindex="0" aria-describedby="invitePremiumHint"><button type="button" class="btn cv-premium-invite" id="inviteBtn" '+(!state.tenant||preview?'disabled':inviteLocked?'aria-disabled="true"':'')+'>+ Nutzer einladen <span aria-label="Premium-Funktion">★</span></button><span id="invitePremiumHint" class="cv-premium-invite-tip" role="tooltip">Premium Funktion – zum Freischalten kontaktieren Sie bitte Ihr Walectra Team.</span></span>'+
     (inviteLocked?'<span class="cv-feature-note">Portal-Einladungen bei Walectra freigeben lassen.</span>':''));
   h+='<section class="panel"><div class="panel-head"><h2>'+esc(tenant().name)+'</h2></div>'+
-    '<div class="toolbar"><input class="search" id="searchInput" placeholder="Name oder E-Mail suchen …" value="'+esc(state.query)+'"><span class="micro">'+shown.length+' Konten / Einladungen</span></div>'+
-    '<div class="table-wrap"><table class="data-table"><thead><tr><th>Name</th><th>E-Mail</th><th>Rolle</th><th>Ladepunkte</th><th>Status</th><th>Aktion</th></tr></thead><tbody>';
-  h+=shown.map(p=>'<tr><td><strong>'+esc(p.name)+'</strong></td><td>'+esc(p.email)+'</td><td>'+esc(p.role==='admin'?'Kunden-Admin':'Nutzer')+'</td>'+
+    '<div class="toolbar"><input class="search" id="searchInput" placeholder="Name, E-Mail oder RFID-Kennung suchen …" value="'+esc(state.query)+'"><span class="micro">'+shown.length+' Konten / Einladungen</span></div>'+
+    '<div class="table-wrap"><table class="data-table"><thead><tr><th>Name</th><th>RFID-Kennung</th><th>E-Mail</th><th>Rolle</th><th>Ladepunkte</th><th>Status</th><th>Aktion</th></tr></thead><tbody>';
+  h+=shown.map(p=>'<tr><td><strong>'+esc(p.name)+'</strong></td><td>'+(matches(p).map(card=>'<div><code class="rfid-uid">'+esc(card.id_tag??'Erneut einlesen')+'</code>'+(!card.enabled?' <span class="chip pending">Gesperrt</span>':'')+'</div>').join('')||'–')+'</td><td>'+esc(p.email)+'</td><td>'+esc(p.role==='admin'?'Kunden-Admin':'Nutzer')+'</td>'+
     '<td>'+(p.chargerIds.length?p.chargerIds.map(id=>'<span class="chip">'+esc(db.chargers.find(x=>x.id===id)?.location||'Ladepunkt')+'</span>').join(' '):p.pointNames?.length?p.pointNames.map(n=>'<span class="chip">'+esc(n)+'</span>').join(' '):'–')+'</td>'+
     '<td><span class="chip '+(p.state==='aktiv'?'success':'pending')+'">'+esc(p.state)+'</span>'+
     (p.portalEnabled===false?' <span class="chip">RFID-Profil</span>':'')+
@@ -773,15 +777,24 @@
     '<td>'+(p.state==='aktiv'&&p.role==='user'?'<button class="btn ghost small" data-user-access="'+esc(p.id)+'">Zuweisen</button>':
       state.role==='super'&&p.role==='admin'&&p.state==='aktiv'?'<button class="btn ghost small" data-admin-permissions="'+esc(p.id)+'">Freigaben</button>':'–')+
     (state.role==='super'&&p.state==='aktiv'&&p.portalEnabled!==false?'<button class="btn ghost small" data-charge-permissions="'+esc(p.id)+'">Ladesteuerung</button>':'')+'</td></tr>').join('');
-  h+=shown.length?'':'<tr><td colspan="6" class="empty">Noch keine Nutzer.</td></tr>';
+  h+=shown.length?'':'<tr><td colspan="7" class="empty">Keine passenden Nutzer.</td></tr>';
   return h+'</tbody></table></div></section>'+
-    (state.role==='admin'?physicalRfidPanel():'');
+    physicalRfidPanel();
   }
 
   function physicalRfidPanel(){
+    const cards=availableTags().filter(card=>{
+      const owner=availablePeople().find(p=>p.id===card.user_id);
+      return state.page!=='user-management'||[owner?.name,owner?.email,card.label,card.id_tag].join(' ').toLowerCase().includes(state.query.trim().toLowerCase());
+    });
     return '<section class="panel panel-top-gap"><div class="panel-head"><h2>RFID-Karten</h2>'+
       '<button type="button" id="managePhysicalRfid" class="btn ghost small" '+(preview||!state.tenant?'disabled':'')+
-      '>RFID-Karten verwalten</button></div></section>';
+      '>+ RFID-Karte hinzufügen</button></div>'+
+      (preview?'<p class="inline-help">RFID-Kennungen und Änderungen sind nur im echten Kunden-Admin-Konto verfügbar.</p>':
+       db.rfidStatus!=='ready'?'<p class="inline-help">'+(db.rfidStatus==='unconfigured'?'RFID ist serverseitig noch nicht eingerichtet.':'RFID-Karten konnten nicht geladen werden.')+'</p>':'')+
+      '<div class="table-wrap"><table class="data-table rfid-table"><thead><tr><th>Kartenname</th><th>RFID-Kennung (OCPP idTag)</th><th>Nutzer</th><th>Status</th><th>Aktion</th></tr></thead><tbody>'+
+      (cards.length?cards.map(card=>'<tr><td>'+esc(card.label)+'</td><td><code class="rfid-uid">'+esc(card.id_tag??'Erneut einlesen')+'</code></td><td>'+esc(availablePeople().find(p=>p.id===card.user_id)?.name||'–')+'</td><td><span class="chip '+(card.enabled?'success':'pending')+'">'+(card.enabled?'Aktiv':'Gesperrt')+'</span></td><td><button type="button" class="btn ghost small" data-inline-rfid-card="'+esc(card.id)+'" data-rfid-enable="'+!card.enabled+'" '+(preview||db.rfidStatus!=='ready'?'disabled':'')+'>'+(card.enabled?'Sperren':'Freigeben')+'</button></td></tr>').join(''):'<tr><td colspan="5" class="empty">Keine passenden RFID-Karten.</td></tr>')+
+      '</tbody></table></div></section>';
   }
 
   function people(){
@@ -1242,8 +1255,8 @@
 
     function renderRecent(){
       const markup=recent.length?'<div class="table-wrap"><table class="data-table">'+
-        '<thead><tr><th>Uhrzeit (Berlin)</th><th>Wallbox</th><th>Ladepunkt</th><th>Aktion</th></tr></thead><tbody>'+
-        recent.map(read=>'<tr><td>'+esc(readTime(read))+'</td><td>'+esc(read.station_name||'Wallbox')+'</td><td>'+esc(readPoint(read))+'</td>'+
+        '<thead><tr><th>Uhrzeit (Berlin)</th><th>Wallbox</th><th>Ladepunkt</th><th>RFID-Kennung</th><th>Aktion</th></tr></thead><tbody>'+
+        recent.map(read=>'<tr><td>'+esc(readTime(read))+'</td><td>'+esc(read.station_name||'Wallbox')+'</td><td>'+esc(readPoint(read))+'</td><td><code>'+esc(read.id_tag??'Erneut einlesen')+'</code></td>'+
           '<td><button class="btn ghost small" type="button" data-rfid-read="'+esc(read.id)+'" aria-pressed="'+
           (read.id===selectedReadId)+'">Auswählen</button></td></tr>').join('')+
         '</tbody></table></div>':'<p>Aktuell sind keine Kartenlesungen verfügbar.</p>';
@@ -1251,7 +1264,7 @@
       seenForm.hidden=!selectedReadId;
       if(selectedReadId){
         const read=currentRead();
-        $('rfidSeenSelection').textContent=read?[readTime(read),read.station_name,readPoint(read)].filter(Boolean).join(' · '):
+        $('rfidSeenSelection').textContent=read?[readTime(read),read.station_name,readPoint(read),read.id_tag].filter(Boolean).join(' · '):
           'Diese Kartenlesung ist abgelaufen oder wurde bereits zugeordnet. Wähle eine aktuelle Lesung.';
       }
       controls();
@@ -1287,11 +1300,11 @@
           !users.length?'Lege zuerst einen aktiven Nutzer an.':
           !points.length?'Richte zuerst einen aktiven Ladepunkt ein.':'';
         cards.innerHTML=data.cards?.length?'<h3>Zugeordnete Karten</h3><ul>'+data.cards.map(card=>
-          '<li class="status-row"><span>'+esc(card.label)+' · '+esc(users.find(u=>u.id===card.user_id)?.name||'Nutzer gesperrt')+'</span>'+
+          '<li class="status-row"><span>'+esc(card.label)+' · '+esc(card.id_tag??'Erneut einlesen')+' · '+esc(users.find(u=>u.id===card.user_id)?.name||'Nutzer gesperrt')+'</span>'+
           '<button type="button" class="btn ghost small" data-rfid-card="'+esc(card.id)+'" data-rfid-enable="'+!card.enabled+'" '+
           (!configured?'disabled':'')+'>'+ (card.enabled?'Sperren':'Freigeben')+'</button></li>').join('')+'</ul>':'';
         renderRecent();
-        if(action==='assign-seen'){
+        if(['assign-seen','manual','confirm','set-enabled'].includes(action)){
           try{await refreshData();}
           catch{if(active())toast('RFID-Karte zugeordnet. Die Freigaben konnten nicht neu geladen werden.');}
         }
@@ -1555,7 +1568,7 @@
       '<button class="btn" type="submit">Speichern & Verbindungsdaten anzeigen</button></div></form>';
   }else if(type==='create-user'){
     if(state.role==='user'||preview||!state.tenant)return;
-    content='<p>Das RFID-Profil kann Ladepunkte und Karten erhalten. Der Portalzugang entsteht durch eine separate Einladung.</p>'+
+    content='<p>Nutzer und Ladepunkte ohne Premium-Freigabe verwalten. Dieses RFID-Profil erhält keinen Portalzugang. Die separate Premium-Einladung bleibt optional.</p>'+
       '<form id="pilotForm"><div class="field"><label for="newDriverName">Name</label><input id="newDriverName" name="name" required maxlength="160"></div>'+
       '<div class="field"><label for="newDriverEmail">E-Mail-Adresse</label><input id="newDriverEmail" name="email" type="email" required maxlength="254"></div>'+
       (points.length?'<div class="station-point-list"><h3>Ladepunkte zuweisen</h3>'+allPointsOption()+points.map(p=>
@@ -1919,6 +1932,14 @@
   }
   const reportExport=e.target.closest('[data-session-export]');
   if(reportExport){await exportChargingHistory(reportExport.dataset.sessionExport);return;}
+  const inlineCard=e.target.closest('[data-inline-rfid-card]');
+  if(inlineCard){
+    if(preview||!['admin','super'].includes(state.role)||inlineCard.disabled)return;
+    inlineCard.disabled=true;
+    try{await api('/api/ocpp/rfid','POST',{...scope(),action:'set-enabled',cardId:inlineCard.dataset.inlineRfidCard,enabled:inlineCard.dataset.rfidEnable==='true'});await refreshData('RFID-Status gespeichert.');}
+    catch(err){toast(err.message);inlineCard.disabled=false;}
+    return;
+  }
   if(e.target.closest('#managePhysicalRfid')){showPhysicalRfid();return;}
   if(e.target.closest('#createUserBtn')){showModal('create-user');return;}
   if(e.target.closest('#inviteBtn')){if(!canInvite())showPremium('Portal-Einladungen');else showModal('invite');return;}
