@@ -1,5 +1,7 @@
 # ChargeVisor Business – verbindliche Entwicklungsregeln
 
+**Aktueller Arbeitsort (25.11.2026):** Ausschließlich dieses öffentliche Repository für neue Entwicklung und Dokumentation verwenden. Render-Quellenwechsel ist bis zur Live-Verifikation noch offen; alte private Quelle nicht weiterentwickeln. Zuerst README, docs/START-NEW-CHAT.md und docs/project-handover.md lesen. Keine privaten Produktionsdaten oder Secrets veröffentlichen. Bestehenden Betrieb unverändert lassen, nur freigegebene Änderungen deployen.
+
 Diese Datei gilt für Coding-Agenten und alle zukünftigen Codeänderungen.
 
 ## Bestehende Funktionen NICHT entfernen
@@ -13,7 +15,7 @@ Diese Datei gilt für Coding-Agenten und alle zukünftigen Codeänderungen.
 
 ## Geschäftslogik
 - Walectra/Superadmin richtet Kunden, Standorte, Wallboxen und OCPP-Identitäten ein.
-- Kunden-Admin verwaltet nur Nutzer und deren Ladepunkt-Zuordnungen im eigenen Kundenkonto.
+- Kunden-Admin verwaltet Nutzer, deren Ladepunkt-Zuordnungen und RFID-Karten im eigenen Kundenkonto ohne Premium; Portal-Einladung bleibt Premium und Rollenvorschau bleibt read-only.
 - Nutzer sieht nur zugewiesene Ladepunkte. Bestehende E-Mail-Adressen dürfen für zusätzliche Ladepunkte wiederverwendet werden.
 - OCPP 1.6J-WSS-Zugangsdaten werden nur geschützt bereitgestellt, Passwörter niemals im Klartext gespeichert.
 - Der **externe OCPP-Desktop-Simulator MUSS wie eine echte OCPP-1.6J-Wallbox funktionieren**: reguläre `wss://.../ocpp/{ChargePointID}`-URL, Standard-OCPP-`ocpp1.6`-Subprotokoll und dieselben vom Kundenbackend ausgegebenen Basic-Auth-Zugangsdaten. **Keine zusätzlichen simulator-only HTTP-Header, gesonderten OCPP-IDs oder `is_simulator=true`-Pflicht für seine Verbindung erzwingen.** Jede normal provisionierte Station soll emulierbar sein, sofern die OCPP-ID nicht bereits verbunden ist.
