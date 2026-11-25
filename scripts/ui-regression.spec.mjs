@@ -603,3 +603,41 @@ test('ChargeVisor shortcut metadata and real PNG assets are served without login
     expect(bytes.readUInt32BE(20)).toBe(size);
   }
 });
+
+test('Custom session dates restrict actual rows and CSV even when the API returns other days',async({page})=>{
+  await page.clock.setFixedTime(new Date('2026-11-25T12:00:00Z'));
+  await mockBackend(page,'superadmin');
+  const base={stopped_at:'2026-11-25T23:59:00Z',site_name:'Garage',point_name:'Ladepunkt',connector_id:1,energy_wh:1000,authorization_kind:'remote'};
+  const sessions=[
+    {...base,id:'1',started_at:'2026-11-22T22:59:59Z',point_name:'Ausserhalb vorher',user_name:'S-Admin'},
+    {...base,id:'2',started_at:'2026-11-22T23:00:00Z',point_name:'Erster Tag',user_name:'S-Admin'},
+    {...base,id:'3',started_at:'2026-11-24T12:00:00Z',point_name:'Mittlerer Tag',user_name:'Admin'},
+    {...base,id:'4',started_at:'2026-11-25T22:59:59Z',point_name:'Letzter Tag',user_name:'Nutzer'},
+    {...base,id:'5',started_at:'2026-11-25T23:00:00Z',point_name:'Ausserhalb nachher',user_name:'S-Admin'}
+  ];
+  await page.route('**/api/ocpp/sessions?**',route=>{
+    const p=new URL(route.request().url()).searchParams;
+    return route.fulfill({json:p.get('months')==='1'?{firstMonth:'2026-11'}:{sessions,nextCursor:null}});
+  });
+  await page.goto('/app');
+  await page.locator('[data-page="sessions"]').click();
+  await page.getByRole('button',{name:'Zeitraum frei wählen'}).click();
+  await page.locator('[name=from]').fill('2026-11-23');
+  await page.locator('[name=to]').fill('2026-11-25');
+  const filtered=page.waitForRequest(req=>{
+    const p=new URL(req.url());return p.pathname==='/api/ocpp/sessions'&&p.searchParams.get('from')==='2026-11-23'&&p.searchParams.get('to')==='2026-11-25';
+  });
+  await page.getByRole('button',{name:'Filtern'}).click();
+  await filtered;
+  const rows=page.locator('#chargingHistory tbody tr');
+  await expect(rows).toHaveCount(3);
+  await expect(rows.nth(0)).toContainText('S-Admin');
+  await expect(rows.nth(1)).toContainText('Admin');
+  await expect(rows.nth(2)).toContainText('Nutzer');
+  await expect(page.locator('#chargingHistory')).not.toContainText('Ausserhalb');
+  const download=page.waitForEvent('download');
+  await page.getByRole('button',{name:'CSV herunterladen'}).click();
+  const csv=await readFile(await (await download).path(),'utf8');
+  expect(csv).toContain('S-Admin');expect(csv).toContain('Admin');expect(csv).toContain('Nutzer');
+  expect(csv).not.toContain('Ausserhalb');
+});
