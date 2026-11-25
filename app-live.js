@@ -457,21 +457,74 @@
     if(state.role!=='super'||preview)return;
     const station=db.stations.find(s=>s.id===id);
     if(!station)return;
-    const close=modal('Ladepunkte erweitern','<form id="extendStationForm" class="cv-form">'+
-      '<label>Ladepunktnamen (jeweils eine Zeile)<textarea name="names" rows="4" maxlength="5200" required></textarea></label>'+
-      '<p class="inline-help">'+(station.topology==='shared'?'Die neuen Connectoren folgen auf die vorhandenen Nummern.':'Jeder neue Ladepunkt erhält eigene OCPP-Zugangsdaten.')+'</p>'+
-      '<div class="modal-actions"><button type="button" class="btn ghost" data-close-modal>Abbrechen</button><button class="btn">Erweitern</button></div></form>');
-    $('extendStationForm').addEventListener('submit',async event=>{
+    const tid=state.tenant,shared=station.topology==='shared';
+    const existing=db.chargers.filter(p=>p.stationId===id&&p.tenant===tid)
+      .sort((a,b)=>a.connectorNumber-b.connectorNumber);
+    const last=existing.reduce((max,p)=>Math.max(max,Number(p.connectorNumber)||0),0);
+    const capacity=Math.max(0,32-Math.max(existing.length,shared?last:0));
+    const site=db.sites.find(s=>s.id===station.siteId);
+    const readonly=(label,value)=>'<div class="field"><label>'+label+'</label><input readonly aria-label="'+label+'" value="'+esc(value)+'"></div>';
+    const close=modal('Ladepunkte erweitern',
+      '<div class="cv-setup-progress"><span class="current">Bestehende Ladestation erweitern</span><span>Neue Ladepunkte</span></div>'+
+      '<p class="cv-setup-intro">Ergänze die bestehende Ladestation um weitere Ladepunkte.</p>'+
+      '<form id="extendStationForm">'+
+      readonly('Standort',site?.name||'–')+readonly('Name der Ladestation',station.name)+
+      '<div class="cv-form-grid">'+readonly('Vorhandene Ladepunkte',String(existing.length))+
+      readonly('Ladepunkte nach Erweiterung',String(existing.length+Math.min(1,capacity))).replace('aria-label="Ladepunkte nach Erweiterung"','id="extendTotal" aria-label="Ladepunkte nach Erweiterung"')+'</div>'+
+      '<div class="field"><label for="extendCount">Anzahl zusätzlicher Ladepunkte</label>'+
+      '<input id="extendCount" name="count" type="number" min="1" max="'+capacity+'" value="'+Math.min(1,capacity)+'" required '+(!capacity?'disabled':'')+'></div>'+
+      '<div class="station-point-list"><h3>Vorhandene Ladepunkte</h3>'+
+      existing.map((p,i)=>'<div class="station-point-input"><span class="point-index">#'+(shared?p.connectorNumber:i+1)+'</span>'+
+        readonly('Ladepunktname',p.location)+'<span class="cv-point-connector">'+
+        (shared?'Connector '+p.connectorNumber:'Eigene OCPP-Verbindung')+(p.disabled?' · Deaktiviert':' · Vorhanden')+'</span></div>').join('')+
+      '</div><div class="station-point-list"><h3>Neue Ladepunkte benennen</h3><div id="extendPoints"></div></div>'+
+      '<p class="cv-setup-note">'+(!capacity?'Maximal 32 Ladepunkte je Ladestation erreicht.':shared?
+        'Die bestehende OCPP-Verbindung bleibt unverändert. Neue Connectoren werden fortlaufend ergänzt. Die Hardware muss die zusätzliche Anzahl unterstützen.':
+        'Jeder neue Ladepunkt erhält eigene OCPP-Zugangsdaten. Die vorhandenen Verbindungen bleiben unverändert.')+'</p>'+
+      '<div class="modal-actions"><button type="button" class="btn ghost" data-close-modal>Abbrechen</button>'+
+      '<button type="submit" class="btn" id="extendSubmit" '+(!capacity?'disabled':'')+'>Ladepunkt hinzufügen</button></div></form>');
+    const form=$('extendStationForm'),count=$('extendCount'),host=$('extendPoints'),button=$('extendSubmit');
+    const drafts=[];
+    let saved=false,busy=false;
+    const validCount=()=>Number.isInteger(count.valueAsNumber)&&count.valueAsNumber>=1&&count.valueAsNumber<=capacity;
+    const draw=()=>{
+      [...host.querySelectorAll('[name="pointName"]')].forEach((input,i)=>drafts[i]=input.value);
+      const n=validCount()?count.valueAsNumber:0;
+      $('extendTotal').value=String(existing.length+n);
+      button.textContent=n===1?'1 Ladepunkt hinzufügen':n+' Ladepunkte hinzufügen';
+      button.disabled=!n||busy||saved;
+      host.innerHTML=Array.from({length:n},(_,i)=>{
+        const index=(shared?last:existing.length)+i+1;
+        return '<div class="station-point-input" data-extend-point-row><span class="point-index">#'+index+'</span>'+
+          '<div class="field"><label for="extendName'+i+'">Ladepunktname</label><input id="extendName'+i+'" name="pointName" required maxlength="160" value="'+
+          esc(drafts[i]??('Stellplatz '+index))+'"></div><span class="cv-point-connector">'+
+          (shared?'Connector '+index:'Neue OCPP-Verbindung')+'</span></div>';
+      }).join('');
+    };
+    count.addEventListener('input',draw);
+    draw();
+    form.addEventListener('submit',async event=>{
       event.preventDefault();
-      const form=event.currentTarget,button=form.querySelector('button:not([type])');
-      button.disabled=true;
+      if(busy||saved||!validCount()||state.tenant!==tid||state.role!=='super'||preview)return;
+      const names=[...host.querySelectorAll('[name="pointName"]')].map(input=>input.value.trim());
+      if(names.length!==count.valueAsNumber||names.some(name=>!name)){toast('Bitte alle Ladepunkte benennen.');return;}
+      busy=true;button.disabled=true;count.disabled=true;
+      let result;
       try{
-        const names=form.elements.names.value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
-        const result=await api('/api/structure/stations/'+id+'/points','POST',{...scope(),names});
-        close();
-        if(result.credentials.length)showOcppCredentials(result.credentials,{stationName:station.name,stationId:id,wssConfigured:result.wssConfigured,oneTime:true});
-        await refreshData(result.points.length+' Ladepunkt(e) hinzugefügt.');
-      }catch(err){toast(err.message);}finally{button.disabled=false;}
+        result=await api('/api/structure/stations/'+id+'/points','POST',{...scope(),names});
+        saved=true;
+      }catch(err){toast(err.message);}
+      finally{busy=false;if(!saved){count.disabled=false;button.disabled=false;}}
+      if(!saved)return;
+      close();
+      if(result.credentials.length)showOcppCredentials(result.credentials,{stationName:station.name,stationId:id,wssConfigured:result.wssConfigured,oneTime:true});
+      else modal('Ladepunkte hinzugefügt','<p>'+esc(station.name)+'</p>'+
+        '<div class="station-point-list"><h3>Neue Connectoren</h3>'+result.points.map(p=>
+          '<div class="station-point-input"><span class="point-index">#'+esc(p.connectorNumber)+'</span><strong>'+esc(p.name)+'</strong><span class="cv-point-connector">Connector '+esc(p.connectorNumber)+'</span></div>').join('')+'</div>'+
+        '<p class="cv-setup-note">Die vorhandene OCPP-ID und das Passwort bleiben unverändert. Ergänze die neuen Connector-IDs an der Hardware und passe bei Bedarf die Anzahl der Connectoren am Master an. Beachte die Herstellergrenzen.</p>'+
+        '<div class="modal-actions"><button type="button" class="btn" data-close-modal>Schließen</button></div>');
+      try{await refreshData(result.points.length+' Ladepunkt(e) hinzugefügt.');}
+      catch(err){toast('Ladepunkte gespeichert; Ansicht konnte nicht aktualisiert werden: '+err.message);}
     });
   }
 
