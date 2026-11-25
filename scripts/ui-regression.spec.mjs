@@ -603,3 +603,62 @@ test('ChargeVisor shortcut metadata and real PNG assets are served without login
     expect(bytes.readUInt32BE(20)).toBe(size);
   }
 });
+
+test('Station extension reuses setup-style named rows, preserves existing points and shows actual new connector IDs',async({page})=>{
+  await mockBackend(page);
+  const structure=mockOverview(A);
+  structure.stations[0].is_simulator=false;
+  structure.points[0].enabled=false;
+  await page.route('**/api/structure/overview?**',r=>r.fulfill({json:structure}));
+  const calls=[];
+  await page.route('**/api/structure/stations/'+STATION+'/points',r=>{
+    calls.push(r.request().postDataJSON());
+    return r.fulfill({status:201,json:{credentials:[],points:[
+      {connectorNumber:4,name:'Garage 4'},{connectorNumber:5,name:'Garage 5'}
+    ],wssConfigured:true}});
+  });
+  await page.goto('/app');
+  await page.locator('[data-page="sites"]').click();
+  await page.locator('[data-expand]').first().click();
+  await page.locator('[data-extend-station]').first().click();
+  const dialog=page.getByRole('dialog');
+  await expect(dialog.getByLabel('Standort',{exact:true})).toHaveValue('Tiefgarage Test');
+  await expect(dialog.getByLabel('Name der Ladestation',{exact:true})).toHaveAttribute('readonly','');
+  await expect(dialog.getByLabel('Vorhandene Ladepunkte')).toHaveValue('3');
+  await expect(dialog.locator('input[readonly][aria-label="Ladepunktname"]')).toHaveCount(3);
+  await expect(dialog).toContainText('Deaktiviert');
+  await dialog.locator('#extendCount').fill('2');
+  await expect(dialog.getByLabel('Ladepunkte nach Erweiterung')).toHaveValue('5');
+  await expect(dialog.locator('[data-extend-point-row]')).toHaveCount(2);
+  await dialog.locator('#extendName0').fill('Garage 4');
+  await dialog.locator('#extendName1').fill('Garage 5');
+  await dialog.locator('#extendCount').fill('1');
+  await dialog.locator('#extendCount').fill('2');
+  await expect(dialog.locator('#extendName1')).toHaveValue('Garage 5');
+  await dialog.locator('#extendCount').fill('30');
+  await expect(dialog.locator('#extendSubmit')).toBeDisabled();
+  await dialog.locator('#extendCount').fill('2');
+  await dialog.getByRole('button',{name:'2 Ladepunkte hinzufügen'}).click();
+  await expect(dialog).toContainText('Neue Connectoren');
+  await expect(dialog).toContainText('Garage 4');
+  await expect(dialog).toContainText('Connector 5');
+  expect(calls).toEqual([{tenantId:A,names:['Garage 4','Garage 5']}]);
+});
+test('Individual wallbox extension indicates separate OCPP connections and cancel does not save',async({page})=>{
+  await mockBackend(page,'superadmin','individual');
+  const structure=mockOverview(A,'individual');
+  structure.stations[0].is_simulator=false;
+  await page.route('**/api/structure/overview?**',r=>r.fulfill({json:structure}));
+  let saves=0;
+  await page.route('**/api/structure/stations/'+STATION+'/points',r=>{saves++;return r.abort();});
+  await page.goto('/app');
+  await page.locator('[data-page="sites"]').click();
+  await page.locator('[data-expand]').first().click();
+  await page.locator('[data-extend-station]').first().click();
+  const dialog=page.getByRole('dialog');
+  await expect(dialog).toContainText('Jeder neue Ladepunkt erhält eigene OCPP-Zugangsdaten.');
+  await expect(dialog.locator('#extendPoints')).toContainText('Neue OCPP-Verbindung');
+  await dialog.getByRole('button',{name:'Abbrechen'}).click();
+  await expect(dialog).toHaveCount(0);
+  expect(saves).toBe(0);
+});
