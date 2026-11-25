@@ -676,6 +676,10 @@
     return contactAccessStates[customer.contact_access]||{label:'Status nicht verfügbar'};
   }
 
+  function customerAddressText(t){
+    return [[t.street,t.house_number].filter(Boolean).join(' '),[t.postal_code,t.city].filter(Boolean).join(' '),t.country].filter(Boolean).join(', ');
+  }
+
   function customers(){
     if(state.role!=='super')return dashboard();
     const cards=db.tenants.map(t=>{
@@ -689,6 +693,7 @@
       return '<article class="cv-customer-card '+(selected?'selected':'')+'">'+
         '<div class="cv-customer-card-top"><span class="cv-customer-avatar">'+esc(initials)+'</span>'+
         '<div class="cv-customer-main"><strong>'+esc(t.name)+'</strong><small>'+esc(status)+'</small></div></div>'+
+        '<div class="cv-contact-grid"><div><span>Kundenanschrift</span><strong>'+esc(customerAddressText(t)||'Noch nicht hinterlegt')+'</strong></div></div>'+
         '<div class="cv-contact-grid"><div><span>Kontaktperson</span><strong>'+esc(t.contact_name||'Noch nicht hinterlegt')+'</strong></div>'+
         '<div><span>E-Mail</span><strong>'+esc(t.contact_email||'–')+'</strong></div>'+
         '<div><span>Telefon</span><strong>'+esc(t.contact_phone||'–')+'</strong></div>'+
@@ -934,6 +939,7 @@
   let h=head('Einstellungen',state.role==='super'?'Kunden, Ansprechpartner und technische Konfiguration.':'Kundeninformationen und Freigaben.');
   h+='<section class="panel"><div class="panel-head"><h2>Kundenkonto</h2>'+(state.role==='super'&&t.id?'<button class="btn ghost small" id="editCurrentCustomerBtn">Kundendaten bearbeiten</button>':'')+'</div>'+
     '<div class="customer-data-grid"><div><small>Kunde</small><strong>'+esc(t.name)+'</strong></div><div><small>Status</small><strong>'+esc(t.status||'–')+'</strong></div>'+
+    (state.role==='super'?'<div><small>Kundenanschrift</small><strong>'+esc(customerAddressText(t)||'Noch nicht hinterlegt')+'</strong></div>':'')+
     '<div><small>Kontaktperson</small><strong>'+esc(t.contact_name||'Noch nicht hinterlegt')+'</strong></div>'+
     '<div><small>Kontakt E-Mail</small><strong>'+esc(t.contact_email||'Noch nicht hinterlegt')+'</strong></div><div><small>Telefon</small><strong>'+esc(t.contact_phone||'Noch nicht hinterlegt')+'</strong></div></div></section>'+
     '<section class="panel panel-top-gap"><h2>OCPP-Anbindung</h2><p>ChargeVisor verbindet Wallboxen über OCPP 1.6 JSON.</p></section>';
@@ -1570,6 +1576,12 @@
     content='<p class="cv-modal-sub">'+(editing?'Kundendaten und Ansprechpartner aktualisieren.':'Kundenkonto erstellen und optional die Kontaktperson als Kunden-Admin einladen.')+'</p>'+
       '<form id="pilotForm" class="cv-form">'+
       '<div class="field"><label>Kundenname / Firmenname / WEG</label><input name="name" required maxlength="180" value="'+esc(t?.name||'')+'" placeholder="z. B. Muster Hausverwaltung GmbH"></div>'+
+      '<div class="cv-form-divider">Kundenanschrift (optional)</div>'+
+      '<div class="cv-form-grid cv-form-street"><div class="field"><label>Straße</label><input name="street" maxlength="160" autocomplete="address-line1" value="'+esc(t?.street||'')+'" placeholder="Musterstraße"></div>'+
+      '<div class="field"><label>Hausnummer</label><input name="houseNumber" maxlength="30" value="'+esc(t?.house_number||'')+'" placeholder="12a"></div></div>'+
+      '<div class="cv-form-grid cv-form-location"><div class="field"><label>Postleitzahl</label><input name="postalCode" maxlength="20" autocomplete="postal-code" value="'+esc(t?.postal_code||'')+'" placeholder="86551"></div>'+
+      '<div class="field"><label>Ort</label><input name="city" maxlength="120" autocomplete="address-level2" value="'+esc(t?.city||'')+'" placeholder="Aichach"></div></div>'+
+      '<div class="field"><label>Land</label><input name="country" maxlength="90" autocomplete="country-name" value="'+esc(editing?(t.country||''):'Deutschland')+'"></div>'+
       '<div class="cv-form-divider">Ansprechpartner</div>'+
       '<div class="field"><label>Name der Kontaktperson</label><input name="contactName" required maxlength="160" autocomplete="name" value="'+esc(t?.contact_name||'')+'" placeholder="Vor- und Nachname"></div>'+
       '<div class="cv-form-grid"><div class="field"><label>E-Mail-Adresse</label><input name="contactEmail" type="email" required autocomplete="email" maxlength="254" value="'+esc(t?.contact_email||'')+'" placeholder="name@firma.de"></div>'+
@@ -1745,7 +1757,8 @@
       let msg='Gespeichert.';
       if(type==='tenant'){
         const created=await api('/api/tenants','POST',{
-          name:data.name,contactName:data.contactName,contactEmail:data.contactEmail,contactPhone:data.contactPhone
+          name:data.name,contactName:data.contactName,contactEmail:data.contactEmail,contactPhone:data.contactPhone,
+          street:data.street,houseNumber:data.houseNumber,postalCode:data.postalCode,city:data.city,country:data.country
         });
         state.tenant=created.id;state.siteOpen='';state.page='customers';msg='Kunde erstellt.';
         if(data.inviteContact==='yes'){
@@ -1760,7 +1773,8 @@
       }else if(type==='edit-tenant'){
         await api('/api/tenants/'+id,'PATCH',{
           name:data.name,contactName:data.contactName,contactEmail:data.contactEmail,
-          contactPhone:data.contactPhone,status:data.status
+          contactPhone:data.contactPhone,status:data.status,
+          street:data.street,houseNumber:data.houseNumber,postalCode:data.postalCode,city:data.city,country:data.country
         });
         state.tenant=id;msg='Kundendaten aktualisiert.';
       }else if(type==='site'||type==='edit-site'){
