@@ -1,4 +1,21 @@
-# ChargeVisor Business – Entwicklungsstand und Sicherheitsregeln (23.11.2026)
+# ChargeVisor Business – Entwicklungsstand und Sicherheitsregeln
+
+## Konsolidierung auf ein aktives Repository – 25.11.2026
+
+**Neue verbindliche Nutzerentscheidung:** Dieses öffentliche Repository `mawosned/ChargeVisor-Business-Dev` ist das einzige Ziel für weitere Entwicklung, Tests, Dokumentation und – nach Umstellung der Render-Quelle – Releases. Später soll es privat gestellt werden. Das bisherige private Repository bleibt als unveränderter Rückfall-/Historienstand erhalten, nicht als zweite aktive Entwicklungsquelle.
+
+**Tatsächlicher Status vor Render-Umstellung:** Der bestehende Dienst ist noch mit dem früheren privaten Repository verbunden. Sein aktuell bestätigter Live-Stand entspricht hinsichtlich sämtlicher Web-App-, Backend-, Schema-, Asset- und Paketdateien dem öffentlichen main-Stand `18ad2b0daae0dccf94a1c22863d7fdeed5d15b00`. Vollständiger Vergleich der Git-Dateibäume: 132 identische Dateien; übrige Unterschiede sind Dokumentation, CI, alte Backup-Hilfsdateien und die bereits weiterentwickelte Windows-Simulator-Version im öffentlichen Repo. Diese Simulator-Version bleibt erhalten. Rückfallbranch `backup/pre-single-repo-20261125` sichert den öffentlichen Ausgangsstand. Keine Änderung an Laufzeitcode, DB, Domain, Hardware, Render-Konfiguration oder BLITZ durch diese Dokumentationsänderung.
+
+**Umstellung noch offen:** Im bestehenden Render-Service nur Build > Source auf dieses GitHub-Repo, Branch main, Node, npm install / npm start ändern. GitHub-Integration verwenden; keine neue Instanz und keine Änderung von Umgebungsvariablen, Region, Tarif, Domain oder Datenbank. Erst nach verifiziertem Live-Deploy, Datenvergleich und Funktionsprüfung ist der Wechsel abgeschlossen. Alte private Quelle bis dahin nicht löschen/archivieren. Danach alle Codeänderungen ausschließlich hier über Feature-Branches/PR, CI und freigegebenen Merge nach main. Keine manuelle Kopie zwischen Repositories mehr. Reine Doku möglichst ohne unnötiges Produktivdeployment.
+
+**Letzte freigegebene Funktionen:** 24.11. Admin-Nutzeranlage und RFID direkt in der Nutzerliste (keine Premium-Pflicht), Portal-Einladung separat Premium, Rollenvorschau schreibgeschützt; Premium-Aktionen mit einheitlichem türkis-grünem Verlauf und weißem Stern; Favicon/Apple Touch Icon/PWA-Icons, vorhandenes Schriftlogo unverändert. Icon-Release DEV PR #20: 96/96 Node, 13/13 Chromium, 6/6 CI; vorher auf bisherigem Render-Dienst live bestätigt.
+
+**Noch nicht produktiv:** DEV PR #21 (Datumsfilter / Fernstart-Rollenlabel) hat beim zuletzt abgefragten Stand alle sechs CI-Workflows bestanden, wurde aber nicht gemergt/deployed. Nicht mit dem reinen Repository-Wechsel vermischen.
+
+**Backups:** Der alte unverschlüsselte produktive Backup-Workflow wird bewusst nicht in das öffentliche Repo übernommen oder aktiviert. Die bereits vorhandene sichere verschlüsselte Archiv-Implementierung und Runbooks bleiben erhalten; echter Backup-Upload und Restore sind noch nicht nachgewiesen. Keine Produktionssecrets, personenbezogenen Daten, internen Logs oder vertraulichen privaten Übergabedetails in öffentliche Git-Dateien übernehmen. Die spätere Sichtbarkeitsänderung macht frühere Kopien nicht rückgängig.
+
+Aktuelle Übergabe: [docs/START-NEW-CHAT.md](docs/START-NEW-CHAT.md) und [docs/project-handover.md](docs/project-handover.md). Ältere Aussagen zum Zwei-Repo-Prozess sind historische Einträge, keine neue Arbeitsanweisung.
+
 
 ## UI-Fix: Blitzen im 12-Sekunden-Live-Poll (23.11.2026)
 
