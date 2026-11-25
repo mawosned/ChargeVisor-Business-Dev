@@ -8,6 +8,14 @@ const sha=v=>createHash('sha256').update(v).digest('hex');
 const fail=(status,message)=>{const e=new Error(message);e.status=status;throw e;};
 const email=v=>String(v||'').trim().toLowerCase();
 const str=(v,n=160)=>String(v||'').trim().slice(0,n);
+// Missing fields preserve existing values on PATCH; an explicit empty string clears a field.
+function customerAddress(p,partial=false){
+  return Object.fromEntries(Object.entries({street:160,houseNumber:30,postalCode:20,city:120,country:90}).map(([key,max])=>{
+    if(p[key]===undefined)return [key,partial?undefined:''];
+    if(typeof p[key]!=='string'||p[key].trim().length>max)fail(400,'Ungültige Kundenanschrift');
+    return [key,p[key].trim()];
+  }));
+}
 const validEmail=v=>v.length<=254&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 const validPwd=v=>typeof v==='string'&&v.length>=12&&v.length<=256;
 const reply=(res,status,data,headers={})=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers});res.end(JSON.stringify(data));};
@@ -110,6 +118,7 @@ export async function createAuthApi(env=process.env){
         "ALTER TABLE cv_tenants ADD COLUMN IF NOT EXISTS contact_name text NOT NULL DEFAULT ''",
         "ALTER TABLE cv_tenants ADD COLUMN IF NOT EXISTS contact_email text NOT NULL DEFAULT ''",
         "ALTER TABLE cv_tenants ADD COLUMN IF NOT EXISTS contact_phone text NOT NULL DEFAULT ''",
+        "ALTER TABLE cv_tenants ADD COLUMN IF NOT EXISTS street text NOT NULL DEFAULT '', ADD COLUMN IF NOT EXISTS house_number text NOT NULL DEFAULT '', ADD COLUMN IF NOT EXISTS postal_code text NOT NULL DEFAULT '', ADD COLUMN IF NOT EXISTS city text NOT NULL DEFAULT '', ADD COLUMN IF NOT EXISTS country text NOT NULL DEFAULT ''",
         "ALTER TABLE cv_tenants ADD COLUMN IF NOT EXISTS deleted_at timestamptz"
       ])await p.query(sql);
       await p.query('ALTER TABLE cv_tenants ADD COLUMN IF NOT EXISTS price_per_kwh numeric(7,4) CHECK (price_per_kwh BETWEEN 0 AND 999)');
@@ -368,7 +377,7 @@ export async function createAuthApi(env=process.env){
       if(path==='/api/tenants'&&req.method==='GET'){
         role(a,'superadmin');
         const r=await pool.query(`
-          SELECT t.id,t.name,t.status,t.price_per_kwh,t.contact_name,t.contact_email,t.contact_phone,t.created_at,
+          SELECT t.id,t.name,t.status,t.price_per_kwh,t.contact_name,t.contact_email,t.contact_phone,t.street,t.house_number,t.postal_code,t.city,t.country,t.created_at,
             CASE
               WHEN u.tenant_id=t.id AND u.role='admin' AND u.enabled THEN 'registered'
               WHEN u.tenant_id=t.id AND u.role='admin' THEN 'disabled'
@@ -392,17 +401,18 @@ export async function createAuthApi(env=process.env){
         const p=await readJson(req);
         const name=str(p.name,180),contactName=str(p.contactName,160),contactEmail=email(p.contactEmail),
           contactPhone=str(p.contactPhone,60);
+        const address=customerAddress(p);
         if(name.length<2||contactName.length<2||!validEmail(contactEmail)||contactPhone.length<5)
           fail(400,'Kundenname, Kontaktperson, gültige E-Mail und Telefonnummer sind erforderlich');
         const id=randomUUID();
         await transaction(async client=>{
           await client.query(
-            'INSERT INTO cv_tenants(id,name,contact_name,contact_email,contact_phone,status) VALUES($1,$2,$3,$4,$5,$6)',
-            [id,name,contactName,contactEmail,contactPhone,'active']);
+            'INSERT INTO cv_tenants(id,name,contact_name,contact_email,contact_phone,status,street,house_number,postal_code,city,country) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+            [id,name,contactName,contactEmail,contactPhone,'active',address.street,address.houseNumber,address.postalCode,address.city,address.country]);
           await audit(client,a,id,'tenant_created',id);
         });
         reply(res,201,{id,name,contact_name:contactName,contact_email:contactEmail,
-          contact_phone:contactPhone,status:'active'});return true;
+          contact_phone:contactPhone,status:'active',street:address.street,house_number:address.houseNumber,postal_code:address.postalCode,city:address.city,country:address.country});return true;
       }
       const contactResetMatch=path.match(/^[/]api[/]tenants[/]([a-f0-9-]{36})[/]contact-password-reset$/i);
       if(contactResetMatch&&req.method==='POST'){
@@ -444,12 +454,13 @@ export async function createAuthApi(env=process.env){
         const contactName=p.contactName===undefined?undefined:str(p.contactName,160);
         const contactEmail=p.contactEmail===undefined?undefined:email(p.contactEmail);
         const contactPhone=p.contactPhone===undefined?undefined:str(p.contactPhone,60);
+        const address=customerAddress(p,true);
         if(name!==undefined&&name.length<2||
            contactName!==undefined&&contactName.length<2||
            contactEmail!==undefined&&!validEmail(contactEmail)||
            contactPhone!==undefined&&contactPhone.length<5)
           fail(400,'Ungültige Kunden- oder Kontaktdaten');
-        if([name,contactName,contactEmail,contactPhone,p.status].every(x=>x===undefined))
+        if([name,contactName,contactEmail,contactPhone,p.status,...Object.values(address)].every(x=>x===undefined))
           fail(400,'Keine Änderungen übermittelt');
         const updated=await transaction(async client=>{
           const existing=await client.query('SELECT id FROM cv_tenants WHERE id=$1 AND deleted_at IS NULL FOR UPDATE',[id]);
@@ -457,9 +468,10 @@ export async function createAuthApi(env=process.env){
           const r=await client.query(
             'UPDATE cv_tenants SET name=COALESCE($2,name),contact_name=COALESCE($3,contact_name),'+
             'contact_email=COALESCE($4,contact_email),contact_phone=COALESCE($5,contact_phone),'+
-            'status=COALESCE($6,status),updated_at=now() WHERE id=$1 AND deleted_at IS NULL '+
-            'RETURNING id,name,status,contact_name,contact_email,contact_phone',
-            [id,name??null,contactName??null,contactEmail??null,contactPhone??null,p.status??null]);
+            'status=COALESCE($6,status),street=COALESCE($7,street),house_number=COALESCE($8,house_number),'+
+            'postal_code=COALESCE($9,postal_code),city=COALESCE($10,city),country=COALESCE($11,country),updated_at=now() WHERE id=$1 AND deleted_at IS NULL '+
+            'RETURNING id,name,status,contact_name,contact_email,contact_phone,street,house_number,postal_code,city,country',
+            [id,name??null,contactName??null,contactEmail??null,contactPhone??null,p.status??null,address.street??null,address.houseNumber??null,address.postalCode??null,address.city??null,address.country??null]);
           if(p.status==='suspended')await client.query(
             'DELETE FROM cv_sessions WHERE user_id IN (SELECT id FROM cv_users WHERE tenant_id=$1)',[id]);
           await audit(client,a,id,'tenant_updated',id);return r.rows[0];
