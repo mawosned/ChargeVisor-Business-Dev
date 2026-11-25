@@ -1,5 +1,12 @@
 # ChargeVisor Business – Projektübergabe (öffentlich)
 
+## Optionale Kundenanschrift – 25.11.2026 (DEV, noch nicht live)
+
+- Nutzerfreigabe: Kundenanschrift separat von Standortanschrift, fünf optionale Felder Straße, Hausnummer, Postleitzahl, Ort, Land. Im bestehenden Anlege- und Bearbeitungsdialog mit vorhandenen CSS-Klassen; Deutschland beim Neuanlegen vorausgefüllt, änder-/löschbar. Bestehende Adressen werden nicht erfunden. Anzeige in Kundenverwaltung und Superadmin-Kundenkonto; vorhandene Kontakt-/Einladungslogik und Rollen unverändert.
+- `backend/schema.sql` und idempotente Migration in `backend/auth.mjs` ergänzen fünf Textspalten in cv_tenants mit leerem Standard. Bestehende Superadmin-API GET/POST/PATCH speichert und liest diese Felder; fehlendes PATCH-Feld bleibt erhalten, explizit leerer String leert Feld. PLZ bleibt Text einschließlich führender Null. Keine Änderung an cv_sites, OCPP, Ladehistorie, RFID, Premium, Erweiterungsdialog oder BLITZ. Keine Produktions-DB-Mutation im Entwicklungsbranch; die additive Migration erfolgt erst bei freigegebenem Deploy.
+- PR [#24](https://github.com/mawosned/ChargeVisor-Business-Dev/pull/24), Prüfcommit `f731bd31ca57bdb1ad5466c3309d6de36e0e3da3`. Geänderte Dateien: app-live.js, backend/auth.mjs, backend/schema.sql, scripts/physical-ocpp-ci.mjs, scripts/ui-regression.spec.mjs, scripts/verify-frontend-unchanged.mjs. Regressionstests für optionale Anlage, Teiländerung, Löschen, Validierung, Rollen und Browser. CI-Ergebnis separat verifizieren. Rollback `backup/pre-customer-address-20261125`. Kein Merge/Deploy ohne Freigabe; PR #21 (Datumsfilter/Rollenlabel) weiterhin separat.
+
+
 **Aktueller Statusabgleich 25.11.2026:** GitHub main und Render auf `33dca8ae387ade35b8f47591a76ffce38620dbbb` verifiziert live. Erweiterungsdialog PR #23 freigegeben; PR #21 offen und bei letzter Abfrage nicht mergefähig. Vor Integration Konflikte auf aktuellem main prüfen und Tests neu ausführen. Neuer Kopier-Prompt in `docs/START-NEW-CHAT.md` auf diesem Docs-Branch. Ältere Angaben sind Historie.
 
 ## Erweiterungsdialog bestehender Ladestationen – 25.11.2026 (LIVE)
