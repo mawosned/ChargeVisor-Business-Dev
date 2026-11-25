@@ -10,6 +10,11 @@ CREATE TABLE IF NOT EXISTS cv_tenants (
   contact_name text NOT NULL DEFAULT '',
   contact_email text NOT NULL DEFAULT '',
   contact_phone text NOT NULL DEFAULT '',
+  street text NOT NULL DEFAULT '',
+  house_number text NOT NULL DEFAULT '',
+  postal_code text NOT NULL DEFAULT '',
+  city text NOT NULL DEFAULT '',
+  country text NOT NULL DEFAULT '',
   deleted_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
