@@ -69,6 +69,25 @@ try{
     method:'POST',body:{email:process.env.CV_BOOTSTRAP_EMAIL,password:process.env.CV_BOOTSTRAP_PASSWORD}});
   const tenant=await post('/api/tenants',superadmin,{name:'Hardwarepilot '+suffix,
     contactName:'Testkontakt',contactEmail:'pilot@chargevisor.test',contactPhone:'+49 000 1234'});
+  // Existing callers can still create a customer without any address.
+  const fields=['street','house_number','postal_code','city','country'];
+  for(const key of fields)assert.equal(tenant[key],'');
+  const address={street:'Teststraße',houseNumber:'12a',postalCode:'01234',city:'Testort',country:'Deutschland'};
+  const addressTenant=await post('/api/tenants',superadmin,{name:'Adress-Test '+suffix,
+    contactName:'Testkontakt',contactEmail:'address-test@chargevisor.test',contactPhone:'+49 000 1234',...address});
+  assert.deepEqual(fields.map(k=>addressTenant[k]),Object.values(address));
+  const path='/api/tenants/'+addressTenant.id;
+  const updated=(await request(path,{method:'PATCH',cookie:superadmin,body:{city:'Neuer Testort',houseNumber:''}})).data.tenant;
+  assert.equal(updated.street,address.street);
+  assert.equal(updated.postal_code,'01234');
+  assert.equal(updated.house_number,'');
+  assert.equal(updated.city,'Neuer Testort');
+  assert.equal(updated.contact_email,'address-test@chargevisor.test');
+  await request(path,{method:'PATCH',cookie:superadmin,body:{street:['bad']},status:400});
+  const list=(await request('/api/tenants',{cookie:superadmin})).data.tenants;
+  assert.equal(list.find(x=>x.id===addressTenant.id).city,'Neuer Testort');
+  const cleared=(await request(path,{method:'PATCH',cookie:superadmin,body:{street:'',postalCode:'',city:'',country:''}})).data.tenant;
+  assert.deepEqual(fields.map(k=>cleared[k]),['','','','','']);
   const site=await post('/api/structure/sites',superadmin,{tenantId:tenant.id,name:'Garage',
     street:'Testweg',houseNumber:'1',postalCode:'80331',city:'München',country:'Deutschland'});
   const station=await post('/api/structure/stations',superadmin,{tenantId:tenant.id,siteId:site.id,
@@ -76,6 +95,11 @@ try{
   const [credentials]=station.credentials;
   const connector=station.points[0].id;
   const admin=await register(superadmin,tenant.id,'admin');
+  await request('/api/tenants',{cookie:admin.cookie,status:403});
+  await request('/api/tenants/'+tenant.id,{method:'PATCH',cookie:admin.cookie,body:{city:'Forbidden'},status:403});
+  const check=(await pool.query('SELECT city FROM cv_tenants WHERE id=$1',[tenant.id])).rows[0];
+  assert.equal(check.city,'');
+  console.log('PASS optional customer address create, partial edit, clear, validation and role isolation');
   // Basic tenant-local driver creation and point access must not depend on premium portal invitations.
   const driverEmail='rfid-only-'+randomUUID()+'@chargevisor.test';
   const driver=await post('/api/users',admin.cookie,{name:'RFID-only driver',email:driverEmail,pointIds:station.points.map(p=>p.id)});
