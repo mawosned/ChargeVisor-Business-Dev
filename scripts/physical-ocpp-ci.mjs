@@ -365,6 +365,47 @@ try{
   assert.ok(complete.rows[0].stopped_at);
   console.log('PASS physical power loss: open transaction unbilled after abrupt disconnect, '+
     'then closed with actual PowerLoss StopTransaction on reconnect');
+  // Actual OCPP remote starts must snapshot the actor role, without altering owner scoping.
+  const historyFor=async(cookie,extra='')=>(await request('/api/ocpp/sessions?'+extra,{cookie})).data.sessions;
+  assert.equal((await historyFor(admin.cookie)).find(x=>Number(x.id)===tx).user_name,'Admin');
+  await request('/api/users/'+owner.id+'/charging-permissions',{method:'PUT',cookie:superadmin,
+    body:{tenantId:tenant.id,canControlCharging:true,canResetStation:false}});
+  async function startAs(cookie,role,extra={}){
+    await call(recovered,'StatusNotification',{connectorId:1,status:'Preparing',errorCode:'NoError'});
+    const response=post(control,cookie,{pointId:connector,command:'start',...extra},200);
+    const [raw]=await once(recovered,'message',{signal:AbortSignal.timeout(5000)});
+    const [type,requestId,action,payload]=JSON.parse(raw);
+    assert.equal(type,2);assert.equal(action,'RemoteStartTransaction');
+    recovered.send(JSON.stringify([3,requestId,{status:'Accepted'}]));
+    assert.equal((await response).status,'Accepted');
+    const at=new Date().toISOString();
+    const id=(await call(recovered,'StartTransaction',{connectorId:1,idTag:payload.idTag,meterStart:5000,timestamp:at}))[2].transactionId;
+    assert.ok(id>0);
+    await call(recovered,'StopTransaction',{transactionId:id,meterStop:5100,timestamp:new Date().toISOString(),reason:'Remote'});
+    const saved=(await pool.query('SELECT remote_actor_role,user_id FROM cv_ocpp_transactions WHERE id=$1',[id])).rows[0];
+    assert.equal(saved.remote_actor_role,role);
+    assert.equal(saved.user_id,role==='user'?owner.id:null);
+    return id;
+  }
+  const superTx=await startAs(superadmin,'superadmin',{tenantId:tenant.id});
+  const userTx=await startAs(owner.cookie,'user');
+  const history=await historyFor(admin.cookie);
+  assert.equal(history.find(x=>Number(x.id)===superTx).user_name,'S-Admin');
+  assert.equal(history.find(x=>Number(x.id)===userTx).user_name,'Nutzer');
+  assert.equal((await historyFor(owner.cookie)).find(x=>Number(x.id)===userTx).user_name,'Nutzer');
+  assert.ok(!(await historyFor(owner.cookie)).some(x=>Number(x.id)===superTx));
+  // Legacy audit lookup: no production rows are touched. Use a fixture far from all other starts.
+  const legacy=(await pool.query(`INSERT INTO cv_ocpp_transactions(identity,tenant_id,connector_id,meter_start_wh,meter_stop_wh,started_at,
+    stopped_at,simulated,chargepoint_id,authorization_kind) VALUES($1,$2,1,1,2,'2020-11-22T23:00:00Z','2020-11-23T00:00:00Z',false,$3,'remote') RETURNING id`,
+    [credentials.identity,tenant.id,connector])).rows[0].id;
+  const saId=(await request('/api/auth/me',{cookie:superadmin})).data.user.id;
+  await pool.query("INSERT INTO cv_audit(actor_id,tenant_id,action,target_id,happened_at) VALUES($1,$2,'ocpp_start',$3,'2020-11-22T23:00:01Z')",[saId,tenant.id,connector]);
+  const range=await historyFor(admin.cookie,'from=2020-11-23&to=2020-11-23');
+  assert.equal(range.length,1);assert.equal(range[0].id,String(legacy));assert.equal(range[0].user_name,'S-Admin');
+  assert.deepEqual(await historyFor(admin.cookie,'from=2020-11-22&to=2020-11-22'),[]);
+  await pool.query("INSERT INTO cv_audit(actor_id,tenant_id,action,target_id,happened_at) VALUES($1,$2,'ocpp_start',$3,'2020-11-22T23:00:02Z')",[admin.id,tenant.id,connector]);
+  assert.equal((await historyFor(admin.cookie,'from=2020-11-23&to=2020-11-23'))[0].user_name,null);
+  console.log('PASS exact Berlin date filters and remote start role attribution, including ambiguous legacy audit.');
   await request('/api/tenants/'+tenant.id,{method:'PATCH',cookie:superadmin,body:{status:'suspended'}});
   await request('/api/users',{cookie:admin.cookie,status:401});
   console.log('Verified two physical connectors: scoped RFID, reconnect, signed meter metadata, tariff snapshot, complete paginated exports and tenant suspension.');
