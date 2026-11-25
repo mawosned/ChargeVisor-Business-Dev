@@ -9,6 +9,7 @@
  * 24 Nov: user-approved management-only RFID list, filter and premium invite styling.
  * 24 Nov: user-approved shared premium action styling only (invite, PDF, charging and reset).
  * 24 Nov: approved favicon / home-screen icon metadata and four new PNGs only.
+ * 25 Nov: approved session date-filter correction in app-live.js only.
  * No design, CSS, HTML, JS application logic, branding or existing export changes
  * may silently enter backend/OCPP pull requests.
  *
@@ -26,7 +27,7 @@ import {dirname,resolve} from 'node:path';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const baseline='4f122a6d41338c017848b8270e3b769817366766';
 const files=Object.freeze({
-  'app-live.js':'1aea180df6297c2ebadd6d6a3735ce32f05def24',
+  'app-live.js':'8cfde9f73af724465932ea8160f543c7859c51c5',
   'app.html':'515eb3466bb0aa8e02cd6eb9a6286c3e42bead01',
   'app.js':'72eb69d35fb9b24e60a019bf098dc9c95fbb7aba',
   'index.html':'da82378bf7aa2e4a180f6a414ca62f97d5a41bb0',

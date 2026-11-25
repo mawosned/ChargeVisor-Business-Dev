@@ -362,10 +362,10 @@
   $('tenantTariff')?.addEventListener?.('submit',saveTariff);
   $('chargingFilters')?.addEventListener?.('submit',event=>{
     event.preventDefault();
-    const data=new FormData(event.currentTarget);
-    const from=data.get('from')||'',to=data.get('to')||'';
+    const form=event.currentTarget;
+    const from=form.elements.namedItem('from')?.value||'',to=form.elements.namedItem('to')?.value||'';
     if(from&&to&&from>to){toast('Das Ende muss am oder nach dem Beginn liegen.');return;}
-    Object.assign(state.sessionFilters,{from,to});
+    Object.assign(state.sessionFilters,{custom:true,from,to});
     void loadChargingHistory();
   });
 }
@@ -1368,6 +1368,19 @@
     if(to)params.set('to',to);
     return params;
   }
+  // Keep the table and paginated exports inside the exact submitted Berlin-local
+  // date range even if an upstream response contains out-of-range sessions.
+  const sessionDay=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Berlin',year:'numeric',month:'2-digit',day:'2-digit'});
+  function sessionsInRange(rows,query){
+    const from=query.get('from'),to=query.get('to');
+    if(!from&&!to)return rows;
+    return rows.filter(row=>{
+      const date=new Date(row.started_at);
+      if(!row.started_at||!Number.isFinite(date.getTime()))return false;
+      const day=sessionDay.format(date);
+      return (!from||day>=from)&&(!to||day<=to);
+    });
+  }
   const sessionDate=value=>value?new Date(value).toLocaleString(locale(),{timeZone:'Europe/Berlin'}):'';
   function sessionRow(s){
     const kwh=s.energy_wh==null?null:Number(s.energy_wh)/1000;
@@ -1394,8 +1407,9 @@
     const query=chargingQuery().toString();
     target.textContent='Ladevorgänge werden geladen …';
     try{
-      const {sessions:rows}=await api('/api/ocpp/sessions?'+query);
+      const {sessions}=await api('/api/ocpp/sessions?'+query);
       if(!target.isConnected||query!==chargingQuery().toString())return;
+      const rows=sessionsInRange(sessions,new URLSearchParams(query));
       target.innerHTML='<div class="table-wrap"><table class="data-table"><thead><tr>'+
         ['Beginn','Ladepunkt','Nutzer','Energie','€/kWh','Betrag','Status'].map(label=>'<th>'+label+'</th>').join('')+
         '</tr></thead><tbody>'+rows.map(sessionRow).map(r=>'<tr>'+
@@ -1415,7 +1429,7 @@
       do{
         if(cursor)query.set('beforeId',String(cursor));
         const page=await api('/api/ocpp/sessions?'+query);
-        rows.push(...page.sessions.map(exportSessionRow));
+        rows.push(...sessionsInRange(page.sessions,query).map(exportSessionRow));
         cursor=page.nextCursor;
       }while(cursor);
       window.ChargeVisorExports['export'+format]({live:true,company,from:query.get('from'),to:query.get('to'),rows});

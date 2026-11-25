@@ -55,6 +55,7 @@ export async function ensurePhysicalOcppSchema(pool){
     ALTER TABLE cv_ocpp_transactions ADD COLUMN IF NOT EXISTS card_id uuid;
     ALTER TABLE cv_ocpp_transactions ADD COLUMN IF NOT EXISTS meter_last_wh numeric;
     ALTER TABLE cv_ocpp_transactions ADD COLUMN IF NOT EXISTS authorization_kind text;
+    ALTER TABLE cv_ocpp_transactions ADD COLUMN IF NOT EXISTS remote_actor_role text;
     ALTER TABLE cv_ocpp_transactions ADD COLUMN IF NOT EXISTS price_per_kwh numeric(7,4);
     ALTER TABLE cv_ocpp_transactions ADD COLUMN IF NOT EXISTS stop_reason text;
     ALTER TABLE cv_ocpp_transactions ADD COLUMN IF NOT EXISTS signed_meter boolean;
@@ -197,7 +198,7 @@ export function createPhysicalOcpp(pool,env){
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',
         ['cv-ocpp-start:'+ctx.identity+':'+connectorId]);
       const grant=remote?(await client.query(`
-        SELECT p.id AS point_id,$3::uuid AS user_id,NULL::uuid AS card_id
+        SELECT p.id AS point_id,$3::uuid AS user_id,NULL::uuid AS card_id,u.role AS remote_actor_role
         FROM cv_chargepoints p JOIN cv_tenants t ON t.id=p.tenant_id
         JOIN cv_users u ON u.id=$4 AND u.enabled AND u.portal_enabled
         WHERE p.id=$1 AND p.tenant_id=$2 AND p.enabled AND t.status='active' AND t.deleted_at IS NULL
@@ -224,9 +225,9 @@ export function createPhysicalOcpp(pool,env){
       if(active.rowCount)return {error:'Transaktion bereits aktiv'};
       const {rows:[created]}=await client.query(`
         INSERT INTO cv_ocpp_transactions(identity,tenant_id,connector_id,meter_start_wh,started_at,
-          simulated,chargepoint_id,user_id,card_id,authorization_kind,price_per_kwh,signed_meter)
-        VALUES($1,$2,$3,$4,$5,false,$6,$7,$8,$9,(SELECT price_per_kwh FROM cv_tenants WHERE id=$2),false) RETURNING id`,
-      [ctx.identity,ctx.tenantId,connectorId,meterStart,at,grant.point_id,grant.user_id,grant.card_id,authorization]);
+          simulated,chargepoint_id,user_id,card_id,authorization_kind,price_per_kwh,signed_meter,remote_actor_role)
+        VALUES($1,$2,$3,$4,$5,false,$6,$7,$8,$9,(SELECT price_per_kwh FROM cv_tenants WHERE id=$2),false,$10) RETURNING id`,
+      [ctx.identity,ctx.tenantId,connectorId,meterStart,at,grant.point_id,grant.user_id,grant.card_id,authorization,remote?grant.remote_actor_role:null]);
       return {transactionId:Number(created.id)};
     });
     if(remote&&result.transactionId){remote.startedAt=at;remote.meterStart=meterStart;}
@@ -405,7 +406,19 @@ export function createPhysicalOcpp(pool,env){
     const {rows}=await pool.query(`
       SELECT x.id,x.connector_id,s.id AS station_id,s.name AS station_name,p.name AS point_name,
         si.id AS site_id,si.name AS site_name,t.name AS organization_name,
-        u.name AS user_name,x.price_per_kwh,x.started_at,x.stopped_at,x.simulated,x.authorization_kind,
+        CASE WHEN x.authorization_kind='remote' THEN
+          CASE COALESCE(x.remote_actor_role,
+            CASE WHEN x.user_id IS NOT NULL THEN 'user' END,
+            -- Legacy remote starts: only a single matching audit event close to
+            -- the transaction start is evidence. Never guess an unknown role.
+            (SELECT CASE WHEN count(*)=1 THEN min(au.role::text) END
+             FROM cv_audit a JOIN cv_users au ON au.id=a.actor_id
+             WHERE a.tenant_id=x.tenant_id AND a.target_id=x.chargepoint_id::text
+               AND a.action='ocpp_start'
+               AND a.happened_at BETWEEN x.started_at-interval '5 seconds' AND x.started_at+interval '5 seconds'))
+            WHEN 'superadmin' THEN 'S-Admin' WHEN 'admin' THEN 'Admin' WHEN 'user' THEN 'Nutzer'
+          END
+        ELSE u.name END AS user_name,x.price_per_kwh,x.started_at,x.stopped_at,x.simulated,x.authorization_kind,
         x.card_id,r.label AS card_name,x.stop_reason,x.signed_meter,x.meter_start_wh,x.meter_stop_wh,
         CASE WHEN x.stopped_at IS NOT NULL AND x.meter_stop_wh>=x.meter_start_wh
           THEN x.meter_stop_wh-x.meter_start_wh END AS energy_wh,
