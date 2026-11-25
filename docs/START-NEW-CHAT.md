@@ -1,5 +1,12 @@
 # ChargeVisor Business – Start eines neuen Chats
 
+## Optionale Kundenanschrift – 25.11.2026 (DEV, noch nicht live)
+
+- Nutzerfreigabe: Kundenanschrift separat von Standortanschrift, fünf optionale Felder Straße, Hausnummer, Postleitzahl, Ort, Land. Im bestehenden Anlege- und Bearbeitungsdialog mit vorhandenen CSS-Klassen; Deutschland beim Neuanlegen vorausgefüllt, änder-/löschbar. Bestehende Adressen werden nicht erfunden. Anzeige in Kundenverwaltung und Superadmin-Kundenkonto; vorhandene Kontakt-/Einladungslogik und Rollen unverändert.
+- `backend/schema.sql` und idempotente Migration in `backend/auth.mjs` ergänzen fünf Textspalten in cv_tenants mit leerem Standard. Bestehende Superadmin-API GET/POST/PATCH speichert und liest diese Felder; fehlendes PATCH-Feld bleibt erhalten, explizit leerer String leert Feld. PLZ bleibt Text einschließlich führender Null. Keine Änderung an cv_sites, OCPP, Ladehistorie, RFID, Premium, Erweiterungsdialog oder BLITZ. Keine Produktions-DB-Mutation im Entwicklungsbranch; die additive Migration erfolgt erst bei freigegebenem Deploy.
+- PR [#24](https://github.com/mawosned/ChargeVisor-Business-Dev/pull/24), Prüfcommit `f731bd31ca57bdb1ad5466c3309d6de36e0e3da3`. Geänderte Dateien: app-live.js, backend/auth.mjs, backend/schema.sql, scripts/physical-ocpp-ci.mjs, scripts/ui-regression.spec.mjs, scripts/verify-frontend-unchanged.mjs. Regressionstests für optionale Anlage, Teiländerung, Löschen, Validierung, Rollen und Browser. CI-Ergebnis separat verifizieren. Rollback `backup/pre-customer-address-20261125`. Kein Merge/Deploy ohne Freigabe; PR #21 (Datumsfilter/Rollenlabel) weiterhin separat.
+
+
 ## Erweiterungsdialog bestehender Ladestationen – 25.11.2026 (LIVE)
 
 - Nutzer hat den Entwurf ausdrücklich bestätigt: vorhandene Ladestation/Standort und bestehende Ladepunkte schreibgeschützt anzeigen; zusätzliche Anzahl wählen, neue Ladepunkte separat benennen, Gesamtzahl anzeigen. Bestehende Setup-CSS-Klassen wiederverwendet. Namen bleiben beim Reduzieren/Erhöhen der Anzahl erhalten. Backend-Grenze 32 (inklusive deaktivierter Punkte und vorhandener Connector-Nummern) berücksichtigt. Bei gemeinsamer OCPP-Verbindung werden erwartete fortlaufende Connectoren vorab und tatsächlich zugewiesene IDs nach erfolgreicher API-Antwort gezeigt; Hardware-/Master-Konfiguration und Herstellergrenzen separat beachten. Bei individuellen Wallboxen bleibt der vorhandene einmalige OCPP-Zugangsdaten-Dialog erhalten.
@@ -23,6 +30,9 @@ Bestehenden Render-Service, Neon-Datenbank, Domains, OCPP-Zugangsdaten und Konfi
 
 ## Zuletzt freigegeben: Ladepunkte erweitern
 Neuer Dialog ist live. Bestehender Standort, Station und vorhandene Ladepunkte schreibgeschützt; zusätzliche Anzahl wählen, einzelne Namen vergeben, Gesamtzahl berechnen, eingegebene Namen beim Ändern der Anzahl erhalten. Backend-Grenze 32 inklusive deaktivierter Punkte und Connector-Nummern beachten; Herstellergrenzen separat. Shared-Master: bestehende OCPP-ID/Passwort behalten, fortlaufende Connectoren; nach Speichern tatsächliche neue IDs und Hardware-Hinweis anzeigen. Individual: bisheriger einmaliger Zugangsdaten-Dialog. Nur extendStation() und Tests/Frontend-Fingerprint geändert, bestehende API, CSS und Schema unverändert. Praktische Sichtprüfung offen.
+
+## Optionale Kundenanschrift – weiterer vorbereiteter PR
+PR #24, optionales Adressformular plus Kundenübersicht und additive fünf Textspalten, nicht live. Getrennt vom Session-Fix; Freigabe und CI prüfen, siehe Abschnitt oben.
 
 ## Nächster beauftragter, noch nicht produktiver Fix
 PR #21 https://github.com/mawosned/ChargeVisor-Business-Dev/pull/21, Prüfcommit ed51942ab4bd8443fa046cff48f0db0bc720a260. Sechs CI-Workflows waren erfolgreich; PR ist offen und beim letzten Abruf nicht mergefähig. Auf aktuellen main integrieren, Konflikte insbesondere in app-live.js und UI-Fingerprint sorgfältig prüfen, neuen Erweiterungsdialog erhalten, sämtliche relevanten Tests erneut ausführen. Nicht blind mergen.
