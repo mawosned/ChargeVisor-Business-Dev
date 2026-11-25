@@ -662,3 +662,51 @@ test('Individual wallbox extension indicates separate OCPP connections and cance
   await expect(dialog).toHaveCount(0);
   expect(saves).toBe(0);
 });
+
+test('Customer address is optional, saved, displayed and editable separately from site address',async({page})=>{
+  await mockBackend(page);
+  let rows=tenants.map(t=>({...t}));
+  const saved=[];
+  const C='cccc2222-cccc-4222-8222-222222222222';
+  const addressFrom=p=>({street:p.street,house_number:p.houseNumber,postal_code:p.postalCode,city:p.city,country:p.country});
+  await page.route('**/api/tenants',async route=>{
+    if(route.request().method()==='POST'){
+      const p=route.request().postDataJSON();saved.push(p);
+      const row={id:C,name:p.name,status:'active',contact_name:p.contactName,contact_email:p.contactEmail,contact_phone:p.contactPhone,...addressFrom(p)};
+      rows=[row,...rows];return route.fulfill({status:201,json:row});
+    }
+    return route.fulfill({json:{tenants:rows}});
+  });
+  await page.route('**/api/tenants/'+C,route=>{
+    const p=route.request().postDataJSON();saved.push(p);
+    rows=rows.map(t=>t.id===C?{...t,...addressFrom(p)}:t);
+    return route.fulfill({json:{tenant:rows.find(t=>t.id===C)}});
+  });
+  await page.goto('/app');
+  await page.locator('[data-page="customers"]').click();
+  await page.locator('#newTenantBtn').click();
+  const dialog=page.getByRole('dialog');
+  await expect(dialog).toContainText('Kundenanschrift (optional)');
+  for(const name of ['street','houseNumber','postalCode','city','country']){
+    await expect(dialog.locator('[name="'+name+'"]')).not.toHaveAttribute('required','');
+  }
+  await expect(dialog.locator('[name="country"]')).toHaveValue('Deutschland');
+  for(const [name,value] of Object.entries({name:'Adresse Test',contactName:'Test Kontakt',contactEmail:'address@example.test',contactPhone:'+49 000 12345',street:'Testweg',houseNumber:'12a',postalCode:'01234',city:'Testort'})){
+    await dialog.locator('[name="'+name+'"]').fill(value);
+  }
+  await dialog.getByRole('button',{name:'Kunde erstellen'}).click();
+  const card=page.locator('.cv-customer-card').filter({hasText:'Adresse Test'});
+  await expect(card).toContainText('Testweg 12a, 01234 Testort, Deutschland');
+  await card.locator('[data-edit-customer]').click();
+  await expect(dialog.locator('[name="postalCode"]')).toHaveValue('01234');
+  await dialog.locator('[name="city"]').fill('Neuer Ort');
+  await dialog.getByRole('button',{name:'Änderungen speichern'}).click();
+  await expect(card).toContainText('01234 Neuer Ort');
+  await card.locator('[data-edit-customer]').click();
+  for(const name of ['street','houseNumber','postalCode','city','country'])await dialog.locator('[name="'+name+'"]').fill('');
+  await dialog.getByRole('button',{name:'Änderungen speichern'}).click();
+  await expect(card).toContainText('Noch nicht hinterlegt');
+  expect(saved).toHaveLength(3);
+  expect(saved[2].street).toBe('');
+  expect(saved[2].country).toBe('');
+});
