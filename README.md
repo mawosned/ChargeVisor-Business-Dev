@@ -1,5 +1,11 @@
 # ChargeVisor Business – Entwicklungsstand und Sicherheitsregeln
 
+## Einzelconnector-Status und Online-Zählung – 26.11.2026 (DEV, noch nicht live)
+
+- Nutzerauftrag: ausschließlich irreführende Statusanzeige bei fehlender individueller Connector-Meldung korrigieren. Master-Heartbeat bestätigt nicht die Verbindung eines einzelnen Ladepunkts. Fehlender Connector-Status = „Nicht verbunden“; bei verbundenem Master rotes Statussymbol, LED des unbestätigten Geräts bleibt neutral. Bestätigte Statusmeldungen, Fehler/Offline und stillgelegte Punkte bleiben unterscheidbar. Systembanner zählt nur individuell bestätigte Online-Ladepunkte, nennt fehlende Connectoren und erklärt fehlende Statusmeldungen; Standortübersicht zählt ebenfalls korrekt. Fehlende Meldung bleibt von tatsächlichem OCPP-Fehler unterscheidbar. Keine Master-Energiewerte/Heartbeat als individuelle Messwerte/Meldungen beim fehlenden Connector ausgeben.
+- Kein Eingriff in Kundenhardware, OCPP, API, Datenbank, Rollen, CSS oder Ladebefehle. Ausschließlich app-live.js, aktualisierte UI-Schutzprüfsumme und Testfixtures/Browser-Regressionen (synthetische 10-Punkt-Kette mit 9 gemeldeten Connectoren, Wiederkehr, Offline, gleichzeitige Störung, eingeschränkter Nutzer). Keine produktiven Kundeninformationen im öffentlichen Repo. [PR #25](https://github.com/mawosned/ChargeVisor-Business-Dev/pull/25), Prüfcommit `6fd402f44eeaba2f26b8f61d8d4e3df219d4d116`. Nutzer hat direkten Deploy freigegeben, bei erfolgreichen Tests. CI und Live-Status separat verifizieren. Rücksprung `backup/pre-connector-status-20261126`. Session-Fix PR #21 bleibt separat.
+
+
 **Aktueller Live-Stand 25.11.2026, 21:59:04 CET:** `2061feaa3da0f9eab90d3d9de6f644eef9eac6ce` (PR #24, optionale Kundenanschrift). Ältere Live-Angaben sind Historie. PR #21 weiterhin separat und nicht produktiv. Rollback-Branch `backup/pre-customer-address-20261125`; additive Adressspalten bei Code-Rollback nicht löschen.
 
 ## Optionale Kundenanschrift – 25.11.2026 (LIVE)
