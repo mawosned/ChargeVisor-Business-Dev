@@ -929,6 +929,8 @@ test('Original ChargeVisor wordmark is visible above the sidebar for all roles a
     await expect(logo).toHaveAttribute('src','/assets/chargevisor-login-white.png');
     await expect.poll(()=>logo.evaluate(img=>[img.complete,img.naturalWidth,img.naturalHeight])).toEqual([true,1962,801]);
     await expect(logo).toHaveCSS('object-fit','contain');
+    await expect(logo).toHaveCSS('transform','matrix(1.2, 0, 0, 1.2, 0, 0)');
+    expect(await logo.evaluate(img=>img.getBoundingClientRect().width/img.offsetWidth)).toBeCloseTo(1.2,1);
     await page.unroute('**/api/**');
   }
   await page.goto('/index.html');
