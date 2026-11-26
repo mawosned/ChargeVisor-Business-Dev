@@ -2,6 +2,7 @@
 <html lang="de">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light">
 <title>ChargeVisor – Anmeldung</title>
+<script>if(["reset","invite","manage","mail"].some(k=>new URLSearchParams(location.search).has(k)))document.documentElement.classList.add("special-entry");</script>
 <style>
 :root {
   font-family: Inter, "Segoe UI", Arial, sans-serif;
@@ -113,6 +114,10 @@ button.toggle-password:hover { background: #f2f4f7; }
 :where(button, input, select, a):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 #feedback { margin: 14px 0 0; }
 #feedback:empty { margin: 0; }
+html.special-entry #login-panel { display:none !important; }
+#login-connection { margin:14px 0 0; }
+#login-connection p { color:#ffb5ba; margin:0; }
+#login-connection button { display:block; margin:4px auto 0; background:transparent; color:#fff; font-size:14px; text-decoration:underline; }
 .error { color: #a82331; }
 .ok { color: #226044; }
 .small { font-size: 12px; color: var(--muted); }
@@ -290,13 +295,14 @@ body.login-screen footer img {
 <body class="login-screen">
 <header><img class="logo" src="/assets/chargevisor-logo.svg" alt="ChargeVisor"><img class="login-brand" src="/assets/chargevisor-login-white.png" alt="ChargeVisor" width="1962" height="801"><div><select id="portalLanguage" aria-label="Sprache"><option value="de">Deutsch</option><option value="en">English</option></select> <a href="/app">Zum Dashboard</a></div></header>
 <main>
-<section class="panel" id="state-panel"><h1>ChargeVisor Business</h1><p id="state-text">Authentifizierung wird geprüft …</p></section>
-<section class="panel" id="login-panel" hidden>
+<section class="panel" id="state-panel" hidden><h1>ChargeVisor Business</h1><p id="state-text">Authentifizierung wird geprüft …</p></section>
+<section class="panel" id="login-panel">
 <h1>Anmelden</h1>
 <form id="login-form"><label for="email">E-Mail</label><input id="email" type="email" autocomplete="username" required>
 <label for="password">Passwort</label><div class="password-field"><input id="password" type="password" autocomplete="current-password" required><button type="button" class="toggle-password" data-password-input="password" aria-controls="password" aria-pressed="false">Anzeigen</button></div>
-<button type="submit">Anmelden</button>
+<button type="submit" disabled>Anmelden</button>
 <button type="button" class="secondary" id="forgot-password">Passwort vergessen?</button></form>
+<div id="login-connection" hidden><p role="status" aria-live="polite" id="login-connection-text"></p><button type="button" id="login-retry">Erneut prüfen</button></div>
 </section>
 <section class="panel" id="reset-request-panel" hidden>
 <h1>Passwort zurücksetzen</h1><p>Gib die E-Mail-Adresse deines ChargeVisor-Kontos ein. Wir schicken dir einen einmaligen Link per E-Mail.</p>
