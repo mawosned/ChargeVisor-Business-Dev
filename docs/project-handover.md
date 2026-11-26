@@ -1,5 +1,8 @@
 # ChargeVisor Business – Projektübergabe (öffentlich)
 
+**26.11.2026 – Login-Korrektur (PR #27, noch nicht live):** Auf ausdrücklichen Nutzerwunsch die nachgezeichnete Login-Wortmarke durch das unveränderte Original-PNG `assets/chargevisor-login-white.png` (1962 × 801, Git-Blob `1322e9cfd322d173508536fabd9fab4e1bc55b71`) ersetzt. Original-PNG bytegleich verifiziert. Nur in sichtbarer Anmeldung Dashboard-Link und Sprachwahl ausgeblendet; Sprachumschaltung innerhalb der App sowie Reset-/Verwaltungsseiten bleiben unverändert. Farben, Login-Funktionen und sonstige Assets unangetastet. Prüfcommit `6721c795b27a3c93814460bd6807202cdd20fbb8`; Rücksprung `backup/pre-login-logo-20261126`. Diff nur neues PNG, login.html, Schutzprüfsumme und Login-Test; CI noch offen. Kein produktiver DB-Schreibzugriff.
+
+
 **26.11.2026 – aktuelle Produktion: Login-Redesign LIVE.** PR #26 erfolgreich gemergt, GitHub main und Render identisch auf `dac62c25e688215b4483cb9af2c26a4bd74e2104`, Deployment `dep-dc48cra9lscs73e1kca0`, live seit 20:21:20 CET. Prüfcommit `7663ccf073556a9de19a8fd382da2156074f1daa`: 6/6 CI, 96/96 Node und 19/19 Chromium einschließlich neuem Desktop/Mobile-Login-Test. Render 96/96 Build, Auth/RFID aktiv. Diff ausschließlich login.html, UI-Schutzprüfsumme und Browser-Test. Dunkler zentraler Glow, Türkis/Petrol-Gradient gemäß letzter Nutzerfreigabe. Historische Transaktionen vor/nach Deploy per Fingerprint identisch. Keine Hardwarebefehle, keine DB-Schreibvorgänge, keine Änderungen an BLITZ, Backend oder Dashboard. Reale visuelle Browser-Abnahme noch offen. Rücksprung `backup/pre-login-design-20261126`. PR #21 bleibt separat offen. Ältere Live-Angaben sind Historie.
 
 
