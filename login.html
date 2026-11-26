@@ -184,8 +184,8 @@ body:has(#dashboard:not([hidden])) .login-visual { display: none; }
 /* Login-only design: preserve invitation, reset and authenticated management layouts. */
 .login-brand,.login-footer-copy { display:none; }
 body:has(#login-panel:not([hidden])) {
-  --login-accent:#009b98;
-  --login-focus:#00e6e6;
+  --login-accent:#00bfc5;
+  --login-focus:#00f1f5;
   color-scheme:dark;
   grid-template-columns:minmax(0,1fr);
   grid-template-rows:auto auto auto;
@@ -193,7 +193,8 @@ body:has(#login-panel:not([hidden])) {
   justify-items:center;
   column-gap:0;
   padding:clamp(28px,6.8vh,52px) 24px 32px;
-  background:#212428;
+  background:radial-gradient(ellipse 45% 110% at 50% 0%, #202f3a 0%, #151d27 28%, #101620 60%, #0a0d15 100%);
+  background-color:#0a0d15;
   color:#fff;
 }
 body:has(#login-panel:not([hidden])) :is(header,main,footer) {
@@ -215,7 +216,7 @@ body:has(#login-panel:not([hidden])) header > div {
 }
 body:has(#login-panel:not([hidden])) header > div select {
   width:auto; min-height:28px; padding:4px 8px; border:1px solid #575c60;
-  background:#212428; color:#eee; font-size:12px;
+  background:#151d27; color:#eee; font-size:12px;
 }
 body:has(#login-panel:not([hidden])) header a { color:#ddd; font-size:12px; }
 body:has(#login-panel:not([hidden])) main {
@@ -232,8 +233,8 @@ body:has(#login-panel:not([hidden])) .login-visual { display:none; }
 #login-panel label { margin:0 0 5px; color:#fff; font-size:16px; font-weight:650; }
 #login-panel label[for="password"] { margin-top:13px; }
 #login-panel input {
-  min-height:48px; border:2px solid #009b98; border-radius:9px;
-  background:#141617; color:#fff; padding:10px 18px;
+  min-height:48px; border:2px solid #00bfc5; border-radius:12px;
+  background:#0a1015; color:#fff; padding:10px 18px;
   font-size:18px; caret-color:#fff;
 }
 #login-panel input:focus {
@@ -242,19 +243,20 @@ body:has(#login-panel:not([hidden])) .login-visual { display:none; }
 }
 #login-panel input:-webkit-autofill {
   -webkit-text-fill-color:#fff;
-  box-shadow:0 0 0 1000px #141617 inset;
+  box-shadow:0 0 0 1000px #0a1015 inset;
 }
 #login-panel input:-webkit-autofill:focus {
-  box-shadow:0 0 0 1000px #141617 inset,0 0 0 1px var(--login-focus);
+  box-shadow:0 0 0 1000px #0a1015 inset,0 0 0 1px var(--login-focus);
 }
 #login-panel .password-field input { padding-right:102px; }
 #login-panel .toggle-password { color:#fff; font-size:15px; font-weight:400; right:6px; }
-#login-panel .toggle-password:hover { background:#292f32; }
+#login-panel .toggle-password:hover { background:#192630; }
 #login-panel form > button[type="submit"] {
-  margin-top:20px; background:#009b98; border-radius:9px;
+  margin-top:20px; background:linear-gradient(165deg,#00d9df 0%,#00b8c0 45%,#00848b 100%); border-radius:12px;
+  box-shadow:inset 0 1px 2px #ffffff24; text-shadow:0 1px 2px #003d4780;
   font-size:18px; font-weight:700;
 }
-#login-panel form > button[type="submit"]:hover { background:#008581; }
+#login-panel form > button[type="submit"]:hover { background:linear-gradient(165deg,#00c8ce,#009ba4 55%,#00777f); }
 #login-panel #forgot-password {
   margin-top:5px; color:#fff; font-size:17px; font-weight:650;
 }
