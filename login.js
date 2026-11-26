@@ -12,7 +12,7 @@ async function api(path,method='GET',data){
   if(data!==undefined){opt.headers['Content-Type']='application/json';opt.body=JSON.stringify(data);}
   const r=await fetch(path,opt);
   let payload={};try{payload=await r.json();}catch{}
-  if(!r.ok)throw new Error(payload.error||'Serverfehler ('+r.status+')');
+  if(!r.ok)throw Object.assign(new Error(payload.error||'Serverfehler ('+r.status+')'),{status:r.status});
   return payload;
 }
 const text=(tag,value,classes)=>{
@@ -382,9 +382,68 @@ function finishAcceptedInvite(invitation){
   return true;
 }
 
+// Ordinary sign-in only: bounded, read-only background probes. Never replay a POST.
+let loginCheck=null;
+const loginSubmit=$('login-form').querySelector('button[type="submit"]');
+const retryDelays=[250,750,1500];
+function cancelLoginCheck(){
+  loginCheck?.abort();loginCheck=null;
+  $('login-connection').hidden=true;
+}
+async function startupGet(path,validate,signal){
+  for(let attempt=0;;attempt++){
+    if(signal.aborted)throw new Error('Abgebrochen');
+    const controller=new AbortController();
+    const cancel=()=>controller.abort();
+    signal.addEventListener('abort',cancel,{once:true});
+    const timer=setTimeout(cancel,4000);
+    try{
+      const r=await fetch(path,{credentials:'same-origin',cache:'no-store',signal:controller.signal});
+      if(!r.ok)throw Object.assign(new Error('HTTP '+r.status),{status:r.status});
+      const payload=await r.json();
+      if(!validate(payload))throw new Error('Ungültige oder nicht verfügbare Serverantwort');
+      return payload;
+    }catch(e){
+      if(signal.aborted||attempt>=retryDelays.length||
+        (e.status>=400&&e.status<500&&![408,425,429].includes(e.status)))throw e;
+    }finally{
+      clearTimeout(timer);signal.removeEventListener('abort',cancel);
+    }
+    await new Promise(resolve=>setTimeout(resolve,retryDelays[attempt]));
+  }
+}
+async function checkOrdinaryLogin(){
+  cancelLoginCheck();
+  if($('login-panel').hidden)return;
+  const controller=new AbortController();
+  loginCheck=controller;
+  const {signal}=controller;
+  try{
+    await startupGet('/api/auth/status',r=>r?.ready===true,signal);
+    if(signal.aborted)return;
+    try{
+      await startupGet('/api/auth/me',r=>typeof r?.user?.id==='string'&&['superadmin','admin','user'].includes(r.user.role),signal);
+      if(!signal.aborted&&!$('login-panel').hidden)window.location.replace('/app');
+    }catch(e){
+      // HTTP 401 is the expected response for a signed-out browser.
+      if(e.status!==401)throw e;
+    }
+  }catch(e){
+    if(signal.aborted||$('login-panel').hidden)return;
+    $('login-connection-text').textContent='Die Verbindung zum Server ist momentan nicht zuverlässig. Bitte versuche es erneut.';
+    $('login-connection').hidden=false;
+  }finally{
+    if(loginCheck===controller)loginCheck=null;
+  }
+}
 async function start(){
   const params=new URLSearchParams(location.search);
   const invite=params.get('invite')||'',reset=resetToken(params);
+  const special=['reset','invite','manage','mail'].some(k=>params.has(k));
+  show('login-panel',!special);
+  show('state-panel',special);
+  document.documentElement.classList.remove('special-entry');
+  if(!special){await checkOrdinaryLogin();return;}
   try{
     const r=await api('/api/auth/status');
     if(!r.ready){
@@ -441,6 +500,7 @@ document.querySelectorAll('.toggle-password').forEach(button=>{
   });
 });
 $('forgot-password').addEventListener('click',()=>{
+  cancelLoginCheck();
   $('reset-email').value=$('email').value||'';
   show('login-panel',false);
   show('reset-request-panel',true);
@@ -451,6 +511,7 @@ $('reset-request-back').addEventListener('click',()=>{
   show('login-panel',true);
   info('');
 });
+$('login-retry').addEventListener('click',()=>{if(!loginSubmit.disabled)void checkOrdinaryLogin();});
 $('reset-request-form').addEventListener('submit',async e=>{
   e.preventDefault();
   try{
@@ -482,11 +543,21 @@ $('reset-form').addEventListener('submit',async e=>{
 });
 $('login-form').addEventListener('submit',async e=>{
   e.preventDefault();
+  if(loginSubmit.disabled)return;
+  cancelLoginCheck();
+  loginSubmit.disabled=true;
+  info('');
+  let signedIn=false;
   try{
-    await api('/api/auth/login','POST',{email:$('email').value,password:$('password').value});
+    const result=await api('/api/auth/login','POST',{email:$('email').value,password:$('password').value});
+    if(result?.ok!==true)throw new Error('Ungültige Serverantwort');
+    signedIn=true;
     $('password').value='';window.location.assign('/app');
-  }catch(err){info(err.message,true);}
+  }catch(err){
+    info(!err.status||err.status>=500?'Anmeldung momentan nicht möglich. Bitte versuche es erneut.':err.message,true);
+  }finally{if(!signedIn)loginSubmit.disabled=false;}
 });
+loginSubmit.disabled=false;
 $('accept-form').addEventListener('submit',async e=>{
   e.preventDefault();
   const invite=new URLSearchParams(location.search).get('invite')||'';
