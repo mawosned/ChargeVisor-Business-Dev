@@ -1,5 +1,8 @@
 # ChargeVisor Business – Start eines neuen Chats
 
+**26.11.2026 – Login-Stabilität LIVE:** PR #29, Merge `e848668812a8945b0773aa20eaa7d80380d2f711`, Render `dep-dc48q4i9lscs73e28ah0`, live seit 20:49:09 CET. Formular unmittelbar sichtbar, begrenzte Hintergrund-GET-Retries (max. 3 Wiederholungen), normale 401 von Ausfällen getrennt, Eingaben erhalten, manuelles Erneut-Prüfen bei dauerhaften Fehlern. Keine automatischen Login-POST-Wiederholungen. 6/6 CI, 96/96 Node, 22/22 Chromium, Render 96/96. Auth-Backend, OCPP, DB, App, BLITZ und Design unverändert; historische Transaktionen per Fingerprint unverändert. Rücksprung `backup/pre-login-resilience-20261126`. Direkter öffentlicher Browser/HTTP-Test aus Assistenzumgebung nicht möglich (DNS), daher Live-Sichtprüfung offen.
+
+
 **26.11.2026 – Login-Stabilität (PR #29, noch nicht live):** Anmeldeformular von Beginn an sichtbar, keine Blockade durch Statusprüfung. Hintergrund-GETs mit 4 s Timeout je Versuch, maximal drei Wiederholungen (250/750/1500 ms), HTTP 401 als normale abgemeldete Sitzung, dauerhafte Fehler mit nicht blockierender Meldung und manuellem Retry. Eingaben bleiben bestehen, POST-Anmeldung wird niemals automatisch wiederholt; nur bestätigte Login-Antwort führt zum Redirect. Manuelle Anmeldung/Passwort-Reset beendet Hintergrundprüfung. Originaldesign, App, Auth-Backend, OCPP, DB und BLITZ unverändert. Tests für Abbruch, 503, ungültiges JSON, Reload, Wiederherstellung und POST-Fehler. Prüfcommit `f3558bc3eedec1de88adfa4c3becc0440f77348a`, Rücksprung `backup/pre-login-resilience-20261126`. Direktes öffentliches HTTP-Probing aus Assistenzumgebung scheitert an DNS; keine Live-Browser-Abnahme. CI/Deploy noch ausstehend.
 
 
