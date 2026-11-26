@@ -761,7 +761,7 @@ test('Nine reported connectors and one missing connector never count the missing
 test('A user with only one assigned shared connector does not inherit master status',async({page})=>{
   await mockBackend(page,'user');
   const assigned=mockOverview(A).points.find(p=>p.connector_number===2);
-  await page.route('**/api/ocpp/live?**',route=>route.fulfill({json:{
+  await page.route('**/api/ocpp/live',route=>route.fulfill({json:{
     live:[{station_id:STATION,point_id:assigned.id,connected:true,status:'Available'}],
     connectors:[]
   }}));
