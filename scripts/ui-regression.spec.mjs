@@ -918,3 +918,35 @@ test('An explicit login cancels startup checks and a failed POST is never automa
   await expect(page.locator('#login-connection')).toBeHidden();
   expect(posts).toBe(1);
 });
+
+
+test('Original ChargeVisor wordmark is visible above the sidebar for all roles and the demo',async({page})=>{
+  const logo=page.locator('.sidebar .brand-logo');
+  for(const role of ['superadmin','admin','user']){
+    await mockBackend(page,role);
+    await page.goto('/app');
+    await expect(logo).toBeVisible();
+    await expect(logo).toHaveAttribute('src','/assets/chargevisor-login-white.png');
+    await expect.poll(()=>logo.evaluate(img=>[img.complete,img.naturalWidth,img.naturalHeight])).toEqual([true,1962,801]);
+    await expect(logo).toHaveCSS('object-fit','contain');
+    await page.unroute('**/api/**');
+  }
+  await page.goto('/index.html');
+  await expect(logo).toBeVisible();
+  await expect(logo).toHaveAttribute('src','/assets/chargevisor-login-white.png');
+  await expect.poll(()=>logo.evaluate(img=>[img.naturalWidth,img.naturalHeight])).toEqual([1962,801]);
+});
+
+test('PDF report uses the same original wordmark without changing premium gating',async({page})=>{
+  await mockBackend(page,'admin');
+  await page.goto('/app');
+  await expect(page.locator('.sidebar .brand-logo')).toBeVisible();
+  const logoRequest=page.waitForResponse(r=>new URL(r.url()).pathname==='/assets/chargevisor-login-white.png');
+  const download=page.waitForEvent('download');
+  await page.evaluate(()=>globalThis.ChargeVisorExports.exportPDF({live:true,company:'Synthetic logo test',rows:[]}));
+  expect((await logoRequest).ok()).toBe(true);
+  const file=await download;
+  const pdf=await readFile(await file.path(),'latin1');
+  expect(pdf).toContain('/Subtype /Image /Width 512 /Height 160');
+  expect(pdf).toContain('/Logo Do Q');
+});
