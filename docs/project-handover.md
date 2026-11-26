@@ -1,5 +1,7 @@
 # ChargeVisor Business – Projektübergabe (öffentlich)
 
+**Statusabgleich 26.11.2026:** GitHub main und Render erneut identisch auf `0a334219fa7949222a15faf2204d825eb007f7fd`, Deployment `dep-dc42i3bbc2fs7395ttvg` live. Öffentliches Repo/main und Auto-Deploy bestätigt. PR #21 weiterhin offen und nicht mergefähig. Aktualisierter Kopier-Prompt in `docs/START-NEW-CHAT.md` auf diesem Docs-Branch. Keine neuen Tests oder Deployments für diese reine Dokumentationsaktualisierung.
+
 **Aktueller Live-Stand 26.11.2026:** `0a334219fa7949222a15faf2204d825eb007f7fd` (PR #25; 96/96 Node, 18/18 Chromium, 6/6 CI; Render live 13:42:35 CET). Rollback `backup/pre-connector-status-20261126`. PR #21 weiterhin separat. Ältere Angaben sind Historie.
 
 ## Einzelconnector-Status und Online-Zählung – 26.11.2026 (LIVE)
