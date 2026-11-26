@@ -770,3 +770,51 @@ test('A user with only one assigned shared connector does not inherit master sta
   await expect(page.locator('.cv-overview-status')).toContainText('0 von 1 Ladepunkten online bestätigt');
   await expect(page.locator('.cv-overview-status')).toContainText('Stellplatz A2');
 });
+
+
+test('Shared login-only anthracite design preserves login, password visibility and reset navigation on desktop and mobile',async({page})=>{
+  let submitted=null;
+  await page.route('**/api/auth/**',async route=>{
+    const path=new URL(route.request().url()).pathname;
+    if(path==='/api/auth/status')return route.fulfill({json:{ready:true}});
+    if(path==='/api/auth/me')return route.fulfill({status:401,json:{error:'Not authenticated'}});
+    if(path==='/api/auth/login'){submitted=route.request().postDataJSON();return route.fulfill({json:{ok:true}});}
+    throw Error('Unexpected auth request '+path);
+  });
+  await page.route('**/app',route=>route.fulfill({contentType:'text/html',body:'<html><body>Test dashboard redirect</body></html>'}));
+  await page.setViewportSize({width:1380,height:763});
+  await page.goto('http://127.0.0.1:10000/login');
+  await expect(page.locator('#login-panel')).toBeVisible();
+  await expect(page.locator('body')).toHaveCSS('background-color','rgb(10, 13, 21)');
+  await expect(page.locator('body')).toHaveCSS('background-image',/radial-gradient/);
+  await expect(page.locator('#login-form button[type="submit"]')).toHaveCSS('background-image',/linear-gradient/);
+  await page.locator('#email').focus();
+  await expect(page.locator('#email')).toHaveCSS('border-top-color','rgb(0, 241, 245)');
+  await expect(page.locator('.login-brand')).toBeVisible();
+  await expect(page.locator('.login-visual')).toBeHidden();
+  await expect(page.locator('footer')).toContainText('Ihr Partner für Ladeinfrastruktur');
+  await expect(page.locator('#email')).toHaveValue('');
+  await expect(page.locator('#password')).toHaveValue('');
+  const rect=await page.locator('#email').boundingBox();
+  expect(rect.width).toBeCloseTo(392,0);
+  expect(Math.abs(rect.x+rect.width/2-690)).toBeLessThan(2);
+  await page.locator('#email').fill('synthetic@example.test');
+  await page.locator('#password').fill('synthetic-test-password');
+  await page.locator('[data-password-input="password"]').click();
+  await expect(page.locator('#password')).toHaveAttribute('type','text');
+  await page.locator('[data-password-input="password"]').click();
+  await expect(page.locator('#password')).toHaveAttribute('type','password');
+  await page.locator('#forgot-password').click();
+  await expect(page.locator('#reset-request-panel')).toBeVisible();
+  await expect(page.locator('#reset-email')).toHaveValue('synthetic@example.test');
+  await expect(page.locator('body')).toHaveCSS('background-color','rgb(255, 255, 255)');
+  await expect(page.locator('.login-brand')).toBeHidden();
+  await page.locator('#reset-request-back').click();
+  await expect(page.locator('#login-panel')).toBeVisible();
+  await page.setViewportSize({width:375,height:667});
+  await expect(page.locator('#email')).toBeVisible();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+  await page.locator('#login-form button[type="submit"]').click();
+  await expect(page).toHaveURL(/\/app$/);
+  expect(submitted).toEqual({email:'synthetic@example.test',password:'synthetic-test-password'});
+});
