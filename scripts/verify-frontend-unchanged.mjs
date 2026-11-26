@@ -33,7 +33,7 @@ const files=Object.freeze({
   'index.html':'6ca240fe5c3bd89ba2ff076d17ef3284906cb0c2',
   'login.html':'36c709083418f55d849fe6fd7eb78cc75cab0f5c',
   'login.js':'a0e9cd533257ce87a411cb35b5b5a442c25cca69',
-  'styles.css':'3e01daeec8aac7d35c0f8496fcc3222c39905688',
+  'styles.css':'4956151e3ff683ef06673a3c21462c2e97d018f9',
   'portal-language.js':'dcc00d5bb54434cab960103819d6074941179c7b',
   'exports.js':'a2639522119e67194113479088c6908ff8166dd6',
   'manifest.webmanifest':'25f5a43e8891ffb8ba8a5c95f8bd1ff344fb48a6',
