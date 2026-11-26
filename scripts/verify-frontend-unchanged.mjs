@@ -9,6 +9,7 @@
  * 24 Nov: user-approved management-only RFID list, filter and premium invite styling.
  * 24 Nov: user-approved shared premium action styling only (invite, PDF, charging and reset).
  * 24 Nov: approved favicon / home-screen icon metadata and four new PNGs only.
+ * 26 Nov: approved sign-in screen only; preserve all other UI fingerprints.
  * No design, CSS, HTML, JS application logic, branding or existing export changes
  * may silently enter backend/OCPP pull requests.
  *
@@ -30,7 +31,7 @@ const files=Object.freeze({
   'app.html':'515eb3466bb0aa8e02cd6eb9a6286c3e42bead01',
   'app.js':'72eb69d35fb9b24e60a019bf098dc9c95fbb7aba',
   'index.html':'da82378bf7aa2e4a180f6a414ca62f97d5a41bb0',
-  'login.html':'0bd2264014111d1e2a194d2503787d8c68a867ad',
+  'login.html':'ed5827ae55bd2a3c8a916badaf3938d24597b9e3',
   'login.js':'259677446a0a96c1116654bcd704aa3454493abf',
   'styles.css':'3e01daeec8aac7d35c0f8496fcc3222c39905688',
   'portal-language.js':'dcc00d5bb54434cab960103819d6074941179c7b',
