@@ -28,14 +28,14 @@ const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const baseline='4f122a6d41338c017848b8270e3b769817366766';
 const files=Object.freeze({
   'app-live.js':'91d97fd86593a6d52034ae62d032f739b1ae904d',
-  'app.html':'515eb3466bb0aa8e02cd6eb9a6286c3e42bead01',
+  'app.html':'2ffe5f5527fd655b995c9823231536b443971005',
   'app.js':'72eb69d35fb9b24e60a019bf098dc9c95fbb7aba',
-  'index.html':'da82378bf7aa2e4a180f6a414ca62f97d5a41bb0',
+  'index.html':'6ca240fe5c3bd89ba2ff076d17ef3284906cb0c2',
   'login.html':'36c709083418f55d849fe6fd7eb78cc75cab0f5c',
   'login.js':'a0e9cd533257ce87a411cb35b5b5a442c25cca69',
   'styles.css':'3e01daeec8aac7d35c0f8496fcc3222c39905688',
   'portal-language.js':'dcc00d5bb54434cab960103819d6074941179c7b',
-  'exports.js':'79a20c6bd8366d4d9f3d8135b0d0ca8f902e51e3',
+  'exports.js':'a2639522119e67194113479088c6908ff8166dd6',
   'manifest.webmanifest':'25f5a43e8891ffb8ba8a5c95f8bd1ff344fb48a6',
   'assets/favicon-32.png':'0cd48a8af91bcc6f9290685df2c106a439389716',
   'assets/apple-touch-icon.png':'e7cfcafa97678f86916f6f20e15ebabf5a2a3948',
