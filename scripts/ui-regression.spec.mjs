@@ -941,10 +941,26 @@ test('PDF report uses the same original wordmark without changing premium gating
   await mockBackend(page,'admin');
   await page.goto('/app');
   await expect(page.locator('.sidebar .brand-logo')).toBeVisible();
-  const logoRequest=page.waitForResponse(r=>new URL(r.url()).pathname==='/assets/chargevisor-login-white.png');
   const download=page.waitForEvent('download');
-  await page.evaluate(()=>globalThis.ChargeVisorExports.exportPDF({live:true,company:'Synthetic logo test',rows:[]}));
-  expect((await logoRequest).ok()).toBe(true);
+  const drawn=await page.evaluate(async()=>{
+    const prototype=CanvasRenderingContext2D.prototype;
+    const original=prototype.drawImage;
+    const images=[];
+    prototype.drawImage=function(source,...args){
+      if(source instanceof HTMLImageElement)images.push({
+        path:new URL(source.src).pathname,width:source.naturalWidth,height:source.naturalHeight,
+        targetWidth:args[2],targetHeight:args[3]
+      });
+      return original.call(this,source,...args);
+    };
+    try{
+      await globalThis.ChargeVisorExports.exportPDF({live:true,company:'Synthetic logo test',rows:[]});
+      return images;
+    }finally{prototype.drawImage=original;}
+  });
+  expect(drawn).toHaveLength(1);
+  expect(drawn[0]).toMatchObject({path:'/assets/chargevisor-login-white.png',width:1962,height:801});
+  expect(drawn[0].targetWidth/drawn[0].targetHeight).toBeCloseTo(1962/801,5);
   const file=await download;
   const pdf=await readFile(await file.path(),'latin1');
   expect(pdf).toContain('/Subtype /Image /Width 512 /Height 160');
