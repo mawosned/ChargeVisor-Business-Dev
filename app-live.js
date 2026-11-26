@@ -115,7 +115,7 @@
       +'" role="img" aria-label="Lumina, Status '+esc(pointStatus(c))+'">'
       +'<img src="/assets/lumina-thumb.svg?v=2" alt="" loading="lazy"><span class="lumina-led" aria-hidden="true"></span></span>';
   const pointStatusLabel = c => c.disabled?'Stillgelegt':(c.status||'Unbekannt');
-  const statusIcon = x => ['Nicht verbunden','Verbunden'].includes(x)?'<span class="charge-symbol unknown">○</span>':x==='Stillgelegt'?'<span class="charge-symbol offline">⊘</span>':x==='Lädt'?'<span class="charge-symbol charging">'+boltIcon('status-bolt')+'</span>':x==='Offline'?'<span class="charge-symbol offline">×</span>'
+  const statusIcon = (x,unconfirmed=false) => x==='Nicht verbunden'&&unconfirmed?'<span class="charge-symbol offline">×</span>':['Nicht verbunden','Verbunden'].includes(x)?'<span class="charge-symbol unknown">○</span>':x==='Stillgelegt'?'<span class="charge-symbol offline">⊘</span>':x==='Lädt'?'<span class="charge-symbol charging">'+boltIcon('status-bolt')+'</span>':x==='Offline'?'<span class="charge-symbol offline">×</span>'
     :/Fehler|Fault|Error|Defekt/i.test(x)?'<span class="charge-symbol offline">!</span>'
     :/Warnung|Problem|Suspicious/i.test(x)?'<span class="charge-symbol warning">!</span>'
      :x==='Pausiert'?'<span class="charge-symbol warning">'+controlIcon('pause')+'</span>':'<span class="charge-symbol ready">●</span>';
@@ -137,13 +137,12 @@
     if(point.disabled)return 'Stillgelegt';
     const live=liveForPoint(point);
     if(!live)return 'Nicht verbunden';
+    // A master heartbeat alone is not confirmation of any individual connector.
+    // This also applies to a user who can see only one point of a shared chain.
+    const connector=exactConnector(point);
+    if(!connector?.status)return 'Nicht verbunden';
     if(!live.connected)return 'Offline';
-    // Shared OCPP identities need per-connector status; never attribute connector 1's
-    // status to every slave in the chain.
-    const station=getStation(point);
-    if(station?.topology==='shared'&&db.chargers.filter(p=>p.stationId===point.stationId).length>1&&!exactConnector(point))
-      return 'Verbunden';
-    switch(live.status){
+    switch(connector.status){
       case 'Charging':return 'Lädt';
       case 'Available':return 'Bereit';
       case 'Faulted':return 'Fehler';
@@ -153,6 +152,15 @@
       default:return 'Verbunden';
     }
   };
+  const connectorUnconfirmed=point=>!point.disabled&&!exactConnector(point)?.status;
+  const confirmedOnline=point=>!point.disabled&&liveForPoint(point)?.connected===true&&
+    !connectorUnconfirmed(point)&&deviceStatus(point)!=='Offline';
+  const connectorStatusReason=point=>locale()==='en-GB'
+    ?(liveForPoint(point)?.connected?'Master/device connected. No connector status received.':'No connector status received.')
+    :(liveForPoint(point)?.connected?'Master/Gerät verbunden. Keine Connector-Meldung empfangen.':'Keine Connector-Meldung empfangen.');
+  const confirmedCountLabel=(online,total)=>locale()==='en-GB'
+    ?online+' of '+total+' charge points confirmed online'
+    :online+' von '+total+' Ladepunkten online bestätigt';
   const displayPoint = p => ({...p,status:deviceStatus(p)});
   const getStation = c => db.stations.find(st=>st.id===c.stationId);
   const stationKey = c => c.stationId || 'legacy-'+c.id;
@@ -602,16 +610,17 @@
     const points=myChargers(),sites=availableSites(),enabled=points.filter(point=>!point.disabled);
     const faults=enabled.filter(pointFault);
     const statuses=enabled.map(deviceStatus);
-    const online=enabled.filter(point=>liveForPoint(point)?.connected).length;
-    const unknown=enabled.filter(point=>!exactConnector(point)?.status||deviceStatus(point)==='Nicht verbunden').length;
+    const online=enabled.filter(confirmedOnline).length;
+    const missing=enabled.filter(connectorUnconfirmed);
+    const unknown=missing.length;
     const healthy=enabled.length>0&&!unknown&&!faults.length;
     const ready=statuses.filter(status=>status==='Bereit').length,charging=statuses.filter(status=>status==='Lädt').length;
     const issue=faults[0],issueSite=issue&&sites.find(site=>site.id===issue.siteId);
     const failureTime=issue&&deviceStatus(issue)!=='Offline'?exactConnector(issue)?.status_changed_at:null;
     const timeLabel=failureTime?new Intl.DateTimeFormat(locale(),{timeZone:'Europe/Berlin',hour:'2-digit',minute:'2-digit'}).format(new Date(failureTime)):'';
     const systemLine=healthy?'Alle '+countLabel(enabled.length,'Ladepunkt','Ladepunkte')+' online':
-      issue?countLabel(faults.length,'Ladepunkt gestört','Ladepunkte gestört'):
-        enabled.length?countLabel(online,'Ladepunkt online','Ladepunkte online'):'Keine aktiven Ladepunkte';
+      issue?countLabel(faults.length,'Ladepunkt gestört','Ladepunkte gestört')+(unknown?' · '+confirmedCountLabel(online,enabled.length):''):
+        enabled.length?confirmedCountLabel(online,enabled.length):'Keine aktiven Ladepunkte';
     const stats=[
       [boltIcon('metric-bolt'),points.length,points.length===1?'Ladepunkt':'Ladepunkte','points'],
       ['●',ready,'bereit','ready'],['◌',charging,'laden','charging'],
@@ -632,7 +641,12 @@
       (healthy?'✓':issue?'⚠︎':'○')+'</span><div><strong>'+(healthy?'Alles OK':issue?'Störung':'Status unvollständig')+'</strong><p>'+esc(systemLine)+'</p></div></div></div>'+
       (issue?'<div class="cv-overview-fault"><strong>'+esc([issueSite?.name,issue.location].filter(Boolean).join(' · '))+'</strong><p>'+esc(faultReason(issue))+
         '</p><div class="cv-overview-fault-footer">'+(timeLabel?'<span>Seit '+esc(timeLabel)+' Uhr</span>':'')+
-        '<button class="cv-status-link" type="button" data-fault-point="'+esc(issue.id)+'">Details ansehen ›</button></div></div>':'')+'</section>'+
+        '<button class="cv-status-link" type="button" data-fault-point="'+esc(issue.id)+'">Details ansehen ›</button></div></div>':'')+
+      (missing.length?'<div class="cv-overview-fault">'+missing.map(point=>
+        '<strong>'+esc([getStation(point)?.name,point.location].filter(Boolean).join(' · '))+'</strong>'+
+        '<p>Connector #'+esc(mapInfo(point).connector)+' – '+esc(connectorStatusReason(point))+'</p>'+
+        (state.role!=='user'?'<div class="cv-overview-fault-footer"><button class="cv-status-link" type="button" data-fault-point="'+esc(point.id)+'">Details ansehen ›</button></div>':'')
+      ).join('')+'</div>':'')+'</section>'+
       '<div class="cv-overview-stats" aria-label="Status der Ladeinfrastruktur">'+stats.map(([icon,count,label,type])=>
         '<div><span class="cv-stat-symbol cv-stat-'+type+'" aria-hidden="true">'+icon+'</span><span><b>'+count+'</b> '+label+'</span></div>').join('')+'</div>'+
       '<section class="panel cv-power-panel"><div class="cv-power-head"><div><h2>'+heading+'</h2><p>'+esc(place)+' · Summe aller Ladepunkte</p></div>'+
@@ -649,11 +663,12 @@
       '<div class="cv-overview-sites">'+sites.map(site=>{
         const group=points.filter(point=>point.siteId===site.id);
         const issues=group.filter(pointFault).length;
-        const connected=group.filter(point=>!point.disabled&&liveForPoint(point)?.connected).length;
+        const connected=group.filter(confirmedOnline).length;
+        const active=group.filter(point=>!point.disabled).length,unconfirmed=group.some(connectorUnconfirmed);
         return '<button type="button" class="health-site-row" data-site-health="'+esc(site.id)+'"><span class="health-site-identity"><strong>'+
           esc(site.name)+'</strong><small>'+countLabel(group.length,'Ladepunkt','Ladepunkte')+(site.address?' · '+esc(site.address):'')+
-          '</small></span><span class="health-pill '+(issues?'orange':connected?'green':'grey')+'">'+
-          (issues?countLabel(issues,'Störung','Störungen'):connected?connected+' online':'Keine Statusdaten')+
+          '</small></span><span class="health-pill '+(issues||unconfirmed?'orange':connected?'green':'grey')+'">'+
+          (issues?countLabel(issues,'Störung','Störungen'):unconfirmed?confirmedCountLabel(connected,active):connected?connected+' online':'Keine Statusdaten')+
           '</span><span class="health-link">Details ansehen ›</span></button>';
       }).join('')+(sites.length?'':'<div class="health-empty">Noch keine Standorte eingerichtet.</div>')+'</div>'+
       '<section class="panel panel-top-gap"><div class="panel-head"><h2>Letzte Ladevorgänge</h2>'+
@@ -764,7 +779,7 @@
           html+='<div class="point-group '+(p.disabled?'point-disabled':'')+'" data-live-point="'+esc(p.id)+'"><div class="point-row">'+
             '<div class="point-name">'+luminaPreview(display,true)+'<span><strong>'+esc(p.location)+'</strong></span></div>'+
             '<div class="point-current"><span class="cv-point-controls">'+pointControls(p,status)+'</span><span class="cv-point-status">'+
-            statusIcon(status)+'<strong>'+esc(status)+esc(liveLabel)+'</strong></span>'+
+            statusIcon(status,connectorUnconfirmed(p)&&live?.connected===true)+'<strong>'+esc(status)+esc(liveLabel)+'</strong></span>'+
             (power!==null&&(power>0||status==='Lädt')?'<span class="cv-point-power">'+esc(kw(power))+'</span>':'')+'</div>'+
             '<div class="point-connect"><strong>'+(state.role==='super'?esc(p.ocppId||'Nicht hinterlegt'):'Technik durch Walectra')+'</strong>'+
             '<small>Connector '+esc(connectorLabel)+'</small></div>'+
@@ -784,10 +799,11 @@
                 '<div><small>Firmwarestand</small><strong>'+esc(firm)+'</strong></div>'+
                 (state.role==='super'?'<div><small>OCPP-Geräte-ID</small><strong>'+esc(p.ocppId||'Nicht hinterlegt')+'</strong></div>':'')+
                 '<div><small>Connector</small><strong>'+esc(connectorLabel)+'</strong></div>'+
-                '<div><small>Letzte OCPP-Nachricht</small><strong>'+esc(live?.action||'Keine Daten')+'</strong></div>'+
-                '<div><small>Empfangene Energie</small><strong>'+esc(live?.energy_wh??'–')+' Wh</strong></div>'+
+                '<div><small>Letzte OCPP-Nachricht</small><strong>'+esc(connectorUnconfirmed(p)?'Keine Connector-Meldung':live?.action||'Keine Daten')+'</strong></div>'+
+                '<div><small>Empfangene Energie</small><strong>'+esc(connectorUnconfirmed(p)?'–':live?.energy_wh??'–')+' Wh</strong></div>'+
                 '<div><small>Aktuelle Leistung</small><strong>'+(power===null?'–':esc(kw(power)))+'</strong></div>'+
                 (pointFault(p)?'<div><small>Störung</small><strong>'+esc(faultReason(p))+'</strong></div>':'')+
+                (connectorUnconfirmed(p)?'<div><small>Connector</small><strong>'+esc(connectorStatusReason(p))+'</strong></div>':'')+
               '</div>'+
               '<p class="inline-help">'+(live?.simulated?'TESTSIMULATOR – keine reale Energie und keine Abrechnung. ':
               'Werte stammen ausschließlich aus eingegangenen OCPP-Nachrichten. ')+

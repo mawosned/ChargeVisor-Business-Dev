@@ -64,7 +64,7 @@ async function smoke(role,openCustomers=false,openPage=null,withCharger=false,sw
       identity:'cvci000001',station_id:stationId,connected:true,status:'Charging',
       action:'MeterValues',vendor:'Independent Virtual',model:'Test Wallbox',
       firmware:'1.0',simulated:true,last_seen:'2026-11-19T20:00:00Z',energy_wh:1210
-    }]:[]};
+    }]:[],connectors:withCharger?[{identity:'cvci000001',station_id:stationId,connector_id:1,status:'Charging',energy_wh:1210}]:[]};
     else if(route.startsWith('/api/users'))data={users:[]};
     else if(route.startsWith('/api/ocpp/analytics'))data={buckets:[],sessions:[]};
     else if(route.startsWith('/api/ocpp/sessions'))data={sessions:[]};

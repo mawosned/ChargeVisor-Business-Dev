@@ -26,7 +26,7 @@ import {dirname,resolve} from 'node:path';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const baseline='4f122a6d41338c017848b8270e3b769817366766';
 const files=Object.freeze({
-  'app-live.js':'973c65686e685d17f3e243ee20add45bd027e2bd',
+  'app-live.js':'91d97fd86593a6d52034ae62d032f739b1ae904d',
   'app.html':'515eb3466bb0aa8e02cd6eb9a6286c3e42bead01',
   'app.js':'72eb69d35fb9b24e60a019bf098dc9c95fbb7aba',
   'index.html':'da82378bf7aa2e4a180f6a414ca62f97d5a41bb0',

@@ -710,3 +710,63 @@ test('Customer address is optional, saved, displayed and editable separately fro
   expect(saved[2].street).toBe('');
   expect(saved[2].country).toBe('');
 });
+
+test('Nine reported connectors and one missing connector never count the missing point as online',async({page})=>{
+  await mockBackend(page);
+  const structure=mockOverview(A);
+  structure.stations[0].is_simulator=false;
+  structure.points=Array.from({length:10},(_,i)=>({
+    ...structure.points[0],id:'fixture-point-'+(i+1),name:'Testplatz '+(i+1),connector_number:i+1,enabled:true
+  }));
+  await page.route('**/api/structure/overview?**',route=>route.fulfill({json:structure}));
+  let count=9,connected=true,fault=false;
+  await page.route('**/api/ocpp/live?**',route=>route.fulfill({json:{
+    live:[{station_id:STATION,identity:'cvci000001',connected,status:'Available',action:'Heartbeat',energy_wh:9999}],
+    connectors:Array.from({length:count},(_,i)=>({
+      station_id:STATION,identity:'cvci000001',connector_id:i+1,
+      status:fault&&i===0?'Faulted':'Available',error_code:fault&&i===0?'InternalError':'NoError'
+    }))
+  }}));
+  await page.goto('/app');
+  const banner=page.locator('.cv-overview-status');
+  await expect(banner).toContainText('Status unvollständig');
+  await expect(banner).toContainText('9 von 10 Ladepunkten online bestätigt');
+  await expect(banner).toContainText('Testplatz 10');
+  await expect(banner).toContainText('Connector #10');
+  await expect(banner).toContainText('Keine Connector-Meldung empfangen.');
+  await expect(page.locator('.health-site-row .health-pill')).toContainText('9 von 10 Ladepunkten online bestätigt');
+  const rows=page.locator('#overviewStations .point-row');
+  await expect(rows.locator('.cv-point-status strong')).toHaveText([...Array(9).fill('Bereit'),'Nicht verbunden']);
+  const missing=rows.last();
+  await expect(missing.locator('.charge-symbol.offline')).toBeVisible();
+  await expect(missing.locator('.lumina-off')).toBeVisible();
+  await expect(missing.locator('.cv-point-controls button')).toHaveCount(0);
+  await missing.locator('[data-expand]').click();
+  await expect(page.locator('#overviewStations .point-detail-panel')).toContainText('Keine Connector-Meldung');
+  await expect(page.locator('#overviewStations .point-detail-panel')).not.toContainText('9999 Wh');
+  fault=true;
+  await page.reload();
+  await expect(banner).toContainText('Störung');
+  await expect(banner).toContainText('InternalError');
+  await expect(banner).toContainText('Testplatz 10');
+  fault=false;count=10;
+  await page.reload();
+  await expect(banner).toContainText('Alles OK');
+  await expect(rows.locator('.cv-point-status strong')).toHaveText(Array(10).fill('Bereit'));
+  connected=false;
+  await page.reload();
+  await expect(banner).toContainText('Störung');
+  await expect(rows.locator('.cv-point-status strong')).toHaveText(Array(10).fill('Offline'));
+});
+test('A user with only one assigned shared connector does not inherit master status',async({page})=>{
+  await mockBackend(page,'user');
+  const assigned=mockOverview(A).points.find(p=>p.connector_number===2);
+  await page.route('**/api/ocpp/live',route=>route.fulfill({json:{
+    live:[{station_id:STATION,point_id:assigned.id,connected:true,status:'Available'}],
+    connectors:[]
+  }}));
+  await page.goto('/app');
+  await expect(page.locator('.cv-overview-status')).toContainText('Status unvollständig');
+  await expect(page.locator('.cv-overview-status')).toContainText('0 von 1 Ladepunkten online bestätigt');
+  await expect(page.locator('.cv-overview-status')).toContainText('Stellplatz A2');
+});
