@@ -826,37 +826,95 @@ test('Shared login-only anthracite design preserves login, password visibility a
 });
 
 
-test('Login uses the approved dark theme before auth responds and on refresh, including a failed status request',async({page})=>{
+
+test('Login remains immediately visible and recovers from aborted, malformed and 503 status responses across reloads',async({page})=>{
+  let attempts=0, sessionChecks=0;
   let releaseStatus;
-  let statusGate=new Promise(resolve=>{releaseStatus=resolve;});
-  let failStatus=false;
+  let gate=new Promise(resolve=>{releaseStatus=resolve;});
   await page.route('**/api/auth/**',async route=>{
     const path=new URL(route.request().url()).pathname;
     if(path==='/api/auth/status'){
-      await statusGate;
-      return route.fulfill(failStatus?{status:503,json:{error:'Synthetic outage'}}:{json:{ready:true}});
+      const n=++attempts;
+      if(n===1){await gate;return route.abort('connectionreset');}
+      if(n===2)return route.fulfill({status:503,json:{error:'Synthetic outage'}});
+      if(n===3)return route.fulfill({status:200,contentType:'text/html',body:'Temporary proxy page'});
+      return route.fulfill({json:{ready:true}});
     }
-    if(path==='/api/auth/me')return route.fulfill({status:401,json:{error:'Not authenticated'}});
+    if(path==='/api/auth/me'){sessionChecks++;return route.fulfill({status:401,json:{error:'Not authenticated'}});}
     throw Error('Unexpected auth request '+path);
   });
   await page.goto('/login',{waitUntil:'domcontentloaded'});
-  await expect(page.locator('#state-panel')).toBeVisible();
-  await expect(page.locator('body')).toHaveClass(/login-screen/);
+  await expect(page.locator('#login-panel')).toBeVisible();
+  await expect(page.locator('#state-panel')).toBeHidden();
   await expect(page.locator('body')).toHaveCSS('background-color','rgb(10, 13, 21)');
   await expect(page.locator('.login-brand')).toBeVisible();
-  await expect(page.locator('header .logo')).toBeHidden();
   await expect(page.locator('.login-visual')).toBeHidden();
   await expect(page.locator('#portalLanguage')).toBeHidden();
+  await expect(page.locator('#login-connection')).toBeHidden();
+  await page.locator('#email').fill('synthetic@example.test');
+  await page.locator('#password').fill('synthetic-test-password');
   releaseStatus();
+  await expect.poll(()=>sessionChecks).toBe(1);
+  expect(attempts).toBe(4);
+  await expect(page.locator('#login-connection')).toBeHidden();
+  await expect(page.locator('#email')).toHaveValue('synthetic@example.test');
+  await expect(page.locator('#password')).toHaveValue('synthetic-test-password');
+  for(let i=0;i<5;i++){
+    await page.reload({waitUntil:'domcontentloaded'});
+    await expect(page.locator('#login-panel')).toBeVisible();
+    await expect(page.locator('#state-panel')).toBeHidden();
+    await expect(page.locator('body')).toHaveCSS('background-color','rgb(10, 13, 21)');
+    await expect(page.locator('#login-connection')).toBeHidden();
+  }
+  await expect.poll(()=>sessionChecks).toBeGreaterThan(1);
+});
+
+test('Persistent startup failures keep credentials and allow explicit retry; session 401 is not an outage',async({page})=>{
+  let attempts=0, fail=true, sessionChecks=0;
+  await page.route('**/api/auth/**',async route=>{
+    const path=new URL(route.request().url()).pathname;
+    if(path==='/api/auth/status')return route.fulfill({json:{ready:true}});
+    if(path==='/api/auth/me'){
+      sessionChecks++;
+      if(fail){attempts++;return route.fulfill({status:503,json:{error:'Synthetic outage'}});}
+      return route.fulfill({status:401,json:{error:'Not authenticated'}});
+    }
+    throw Error('Unexpected auth request '+path);
+  });
+  await page.goto('/login');
+  await page.locator('#email').fill('synthetic@example.test');
+  await page.locator('#password').fill('synthetic-test-password');
+  await expect(page.locator('#login-connection')).toBeVisible();
+  expect(attempts).toBe(4);
   await expect(page.locator('#login-panel')).toBeVisible();
-  await expect(page.locator('body')).toHaveCSS('background-color','rgb(10, 13, 21)');
-  statusGate=new Promise(resolve=>{releaseStatus=resolve;});
-  failStatus=true;
-  await page.reload({waitUntil:'domcontentloaded'});
-  await expect(page.locator('#state-panel')).toBeVisible();
-  await expect(page.locator('body')).toHaveCSS('background-color','rgb(10, 13, 21)');
-  await expect(page.locator('.login-visual')).toBeHidden();
+  await expect(page.locator('#email')).toHaveValue('synthetic@example.test');
+  await expect(page.locator('#password')).toHaveValue('synthetic-test-password');
+  fail=false;
+  await page.locator('#login-retry').click();
+  await expect.poll(()=>sessionChecks).toBe(5);
+  await expect(page.locator('#login-connection')).toBeHidden();
+  await expect(page.locator('#login-panel')).toBeVisible();
+});
+
+test('An explicit login cancels startup checks and a failed POST is never automatically replayed',async({page})=>{
+  let posts=0;
+  let releaseStatus;
+  const gate=new Promise(resolve=>{releaseStatus=resolve;});
+  await page.route('**/api/auth/**',async route=>{
+    const path=new URL(route.request().url()).pathname;
+    if(path==='/api/auth/status'){await gate;return route.fulfill({json:{ready:true}});}
+    if(path==='/api/auth/login'){posts++;return route.fulfill({status:503,json:{error:'Synthetic outage'}});}
+    throw Error('Unexpected auth request '+path);
+  });
+  await page.goto('/login',{waitUntil:'domcontentloaded'});
+  await page.locator('#email').fill('synthetic@example.test');
+  await page.locator('#password').fill('synthetic-test-password');
+  await page.locator('#login-form button[type="submit"]').click();
+  await expect(page.locator('#feedback')).toContainText('Anmeldung momentan nicht möglich');
+  expect(posts).toBe(1);
+  await expect(page.locator('#password')).toHaveValue('synthetic-test-password');
+  await expect(page.locator('#login-form button[type="submit"]')).toBeEnabled();
   releaseStatus();
-  await expect(page.locator('#state-text')).toContainText('Synthetic outage');
-  await expect(page.locator('body')).toHaveCSS('background-color','rgb(10, 13, 21)');
+  await expect(page.locator('#login-connection')).toBeHidden();
+  expect(posts).toBe(1);
 });
