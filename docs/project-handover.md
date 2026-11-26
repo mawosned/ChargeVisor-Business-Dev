@@ -1,5 +1,8 @@
 # ChargeVisor Business – Projektübergabe (öffentlich)
 
+**26.11.2026 – Wordmark-Austausch (PR #30, noch nicht live):** Original-PNG `assets/chargevisor-login-white.png` identisch zum erneuten Nutzerupload (Git-Blob `1322e9cfd322d173508536fabd9fab4e1bc55b71`, 1962 × 801). Nur Logo-Referenz in app.html und index.html (gemeinsame Seitenleiste aller Rollen und Menüs) und PDF-Logo in exports.js (proportional im bisherigen Rahmen). Login HTML/JS, CSS, Icons, Premium-Regeln, Backend, OCPP, Datenbank und BLITZ unverändert. Alte SVG bleibt für Sonderansichten der Login-Datei erhalten. Prüfcommit `5f70fe8388edf6dac7af454c78598a81b4b575d4`, Rücksprung `backup/pre-brand-logo-20261126`. CI/Deploy ausstehend.
+
+
 **26.11.2026 – Login-Stabilität LIVE:** PR #29, Merge `e848668812a8945b0773aa20eaa7d80380d2f711`, Render `dep-dc48q4i9lscs73e28ah0`, live seit 20:49:09 CET. Formular unmittelbar sichtbar, begrenzte Hintergrund-GET-Retries (max. 3 Wiederholungen), normale 401 von Ausfällen getrennt, Eingaben erhalten, manuelles Erneut-Prüfen bei dauerhaften Fehlern. Keine automatischen Login-POST-Wiederholungen. 6/6 CI, 96/96 Node, 22/22 Chromium, Render 96/96. Auth-Backend, OCPP, DB, App, BLITZ und Design unverändert; historische Transaktionen per Fingerprint unverändert. Rücksprung `backup/pre-login-resilience-20261126`. Direkter öffentlicher Browser/HTTP-Test aus Assistenzumgebung nicht möglich (DNS), daher Live-Sichtprüfung offen.
 
 
