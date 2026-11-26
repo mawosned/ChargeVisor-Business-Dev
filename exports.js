@@ -332,7 +332,7 @@
         const pic=new Image();
         pic.onload=()=>resolve(pic);
         pic.onerror=()=>resolve(null);
-        pic.src='/assets/chargevisor-logo.svg';
+        pic.src='/assets/chargevisor-login-white.png';
       });
       if(!image)return null;
       const canvas=document.createElement('canvas');
@@ -340,7 +340,9 @@
       const ctx=canvas.getContext('2d');
       ctx.fillStyle='#0b2b28';ctx.fillRect(0,0,512,160);
       ctx.save();ctx.filter='brightness(0) invert(1)';
-      ctx.drawImage(image,12,4,488,152);ctx.restore();
+      const scale=Math.min(488/image.naturalWidth,152/image.naturalHeight);
+      const w=image.naturalWidth*scale,h=image.naturalHeight*scale;
+      ctx.drawImage(image,(512-w)/2,(160-h)/2,w,h);ctx.restore();
       const data=canvas.toDataURL('image/jpeg',.85);
       return {binary:atob(data.slice(data.indexOf(',')+1)),width:512,height:160};
     }catch(error){console.warn('ChargeVisor PDF logo unavailable',error);return null;}
