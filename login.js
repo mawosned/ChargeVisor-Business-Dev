@@ -1,5 +1,11 @@
 const $=id=>document.getElementById(id);
-const show=(id,yes=true)=>{$(id).hidden=!yes;};
+const alternatePanels=['reset-request-panel','reset-panel','invite-panel','dashboard'];
+const show=(id,yes=true)=>{
+  $(id).hidden=!yes;
+  if(id==='login-panel'||alternatePanels.includes(id)){
+    document.body.classList.toggle('login-screen',!alternatePanels.some(panel=>!$(panel).hidden));
+  }
+};
 const info=(msg,bad=false)=>{$('feedback').textContent=msg;$('feedback').className=bad?'error':'ok';};
 async function api(path,method='GET',data){
   const opt={method,credentials:'same-origin',headers:{}};
