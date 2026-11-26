@@ -1,5 +1,8 @@
 # ChargeVisor Business – Start eines neuen Chats
 
+**26.11.2026 – Seitenleisten-Logo größer LIVE:** PR #31, Merge `fbc52d55426980020a6e27058e43a196f6993d93`, Render `dep-dc49dg0473hc739bb6d0`, live seit 21:30:37 CET. Einzige Produktivänderung: `.sidebar .brand-logo{transform:scale(1.2);transform-origin:center}`; 20 % größere Darstellung ohne Layout-Reflow, Original-PNG, Login, PDF, Backend/OCPP/DB/BLITZ unverändert. Prüfcommit `a4d933a54a8ca882e73bb9ec0091cfc4fe59186e`, 6/6 CI, 96/96 Node, 24/24 Chromium, Render 96/96. Historische Transaktionen per Fingerprint unverändert. Rücksprung `backup/pre-sidebar-logo-size-20261126`. Direkte visuelle Live-Abnahme offen.
+
+
 **26.11.2026 – Seitenleisten-Logo größer (PR #31, noch nicht live):** Nutzerfreigabe für sofortigen Deploy nach grünen Prüfungen. Einzige Produktivänderung: `.sidebar .brand-logo{transform:scale(1.2);transform-origin:center}`; 20 % größere visuelle Darstellung ohne Layout-Reflow, Original-PNG, Login, PDF, Backend/OCPP/DB/BLITZ unverändert. Prüfcommit `a4d933a54a8ca882e73bb9ec0091cfc4fe59186e`, Rücksprung `backup/pre-sidebar-logo-size-20261126`. UI-Schutzfingerprint und Logo-Größentest gezielt angepasst. CI/Deploy offen.
 
 
