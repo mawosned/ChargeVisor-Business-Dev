@@ -9,7 +9,7 @@ test('Authenticated ChargeVisor dashboard parses without JavaScript errors',()=>
   assert.doesNotThrow(()=>new Script(js,{filename:'app-live.js'}));
 });
 test('Authenticated UI keeps original design assets and layout',()=>{
-  for(const s of ['styles.css','chargevisor-logo.svg','id="sidebar"','id="nav"','id="content"','/app-live.js'])
+  for(const s of ['styles.css','chargevisor-login-white.png','id="sidebar"','id="nav"','id="content"','/app-live.js'])
     assert.ok(html.includes(s),s+' missing');
 });
 test('Real dashboard has no demo role switch, localStorage or fabricated data',()=>{
