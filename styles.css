@@ -872,3 +872,6 @@ body{background:linear-gradient(152deg,#f4f8f6 0%,#eff5f3 38%,#eaf2ef 100%);colo
 .cv-business .cv-point-controls .cv-control.cv-premium-invite{display:inline-flex;align-items:center;justify-content:center;gap:1px}
 .cv-business .cv-point-controls .cv-control.cv-premium-invite svg{width:12px;height:12px;flex:none}
 .cv-business .cv-point-controls .cv-control.cv-premium-invite .cv-premium-star{font-size:8px;line-height:1;flex:none}
+
+/* Approved sidebar wordmark size: compensate for the transparent PNG margins without shifting navigation. */
+.sidebar .brand-logo{transform:scale(1.2);transform-origin:center}
