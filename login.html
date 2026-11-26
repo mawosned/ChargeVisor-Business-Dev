@@ -181,9 +181,9 @@ body:has(#dashboard:not([hidden])) .login-visual { display: none; }
 .invite-point-group input[type="checkbox"]{width:16px;height:16px;min-height:0;accent-color:#0b8a6e}
 .invite-empty{font-size:13px;color:#97712b;background:#fff8e6;padding:13px;border-radius:8px}
 
-/* Login-only design: preserve invitation, reset and authenticated management layouts. */
+/* Sign-in theme applies from the initial HTML paint; JS removes it only for other visible panels. */
 .login-brand,.login-footer-copy { display:none; }
-body:has(#login-panel:not([hidden])) {
+body.login-screen {
   --login-accent:#00bfc5;
   --login-focus:#00f1f5;
   color-scheme:dark;
@@ -197,16 +197,16 @@ body:has(#login-panel:not([hidden])) {
   background-color:#0a0d15;
   color:#fff;
 }
-body:has(#login-panel:not([hidden])) :is(header,main,footer) {
+body.login-screen :is(header,main,footer) {
   grid-column:1;
   width:min(100%,392px);
 }
-body:has(#login-panel:not([hidden])) header {
+body.login-screen header {
   justify-content:center;
   min-height:0;
 }
-body:has(#login-panel:not([hidden])) header .logo { display:none; }
-body:has(#login-panel:not([hidden])) .login-brand {
+body.login-screen header .logo { display:none; }
+body.login-screen .login-brand {
   display:block;
   width:100%;
   height:auto;
@@ -214,13 +214,13 @@ body:has(#login-panel:not([hidden])) .login-brand {
   object-fit:cover;
   object-position:center;
 }
-body:has(#login-panel:not([hidden])) header > div { display:none; }
-body:has(#login-panel:not([hidden])) main {
+body.login-screen header > div { display:none; }
+body.login-screen main {
   align-self:start;
   padding:0;
   margin-top:clamp(28px,6.8vh,52px);
 }
-body:has(#login-panel:not([hidden])) .login-visual { display:none; }
+body.login-screen .login-visual { display:none; }
 #login-panel h1 {
   position:absolute; width:1px; height:1px; padding:0; margin:-1px;
   overflow:hidden; clip-path:inset(50%); white-space:nowrap;
@@ -256,36 +256,38 @@ body:has(#login-panel:not([hidden])) .login-visual { display:none; }
 #login-panel #forgot-password {
   margin-top:5px; color:#fff; font-size:17px; font-weight:650;
 }
-body:has(#login-panel:not([hidden])) :where(button,a,select):focus-visible {
+body.login-screen :where(button,a,select):focus-visible {
   outline-color:var(--login-focus);
 }
-body:has(#login-panel:not([hidden])) #feedback { color:#fff; }
-body:has(#login-panel:not([hidden])) #feedback.error { color:#ffb5ba; }
-body:has(#login-panel:not([hidden])) #feedback.ok { color:#a6ebca; }
-body:has(#login-panel:not([hidden])) footer {
+body.login-screen #state-panel h1 { color:#fff; font-size:20px; }
+body.login-screen #state-panel p { color:#fff; }
+body.login-screen #feedback { color:#fff; }
+body.login-screen #feedback.error { color:#ffb5ba; }
+body.login-screen #feedback.ok { color:#a6ebca; }
+body.login-screen footer {
   margin-top:clamp(40px,10.5vh,80px); padding:0; text-align:center;
   color:#fff; font-size:17px;
 }
-body:has(#login-panel:not([hidden])) .login-footer-copy {
+body.login-screen .login-footer-copy {
   display:block; margin:0; color:#fff; font-size:17px; line-height:1.4;
 }
-body:has(#login-panel:not([hidden])) footer img {
+body.login-screen footer img {
   width:min(100%,306px); margin:8px auto 12px;
   filter:brightness(0) invert(1);
 }
 @media(max-width:600px) {
-  body:has(#login-panel:not([hidden])) { padding-top:64px; }
+  body.login-screen { padding-top:64px; }
 }
 @media(max-height:640px) {
-  body:has(#login-panel:not([hidden])) main { margin-top:24px; }
-  body:has(#login-panel:not([hidden])) footer { margin-top:28px; }
+  body.login-screen main { margin-top:24px; }
+  body.login-screen footer { margin-top:28px; }
 }
 </style><link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="apple-mobile-web-app-title" content="ChargeVisor">
 </head>
-<body>
+<body class="login-screen">
 <header><img class="logo" src="/assets/chargevisor-logo.svg" alt="ChargeVisor"><img class="login-brand" src="/assets/chargevisor-login-white.png" alt="ChargeVisor" width="1962" height="801"><div><select id="portalLanguage" aria-label="Sprache"><option value="de">Deutsch</option><option value="en">English</option></select> <a href="/app">Zum Dashboard</a></div></header>
 <main>
 <section class="panel" id="state-panel"><h1>ChargeVisor Business</h1><p id="state-text">Authentifizierung wird geprüft …</p></section>
