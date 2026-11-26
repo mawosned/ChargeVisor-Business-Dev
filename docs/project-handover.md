@@ -1,5 +1,8 @@
 # ChargeVisor Business – Projektübergabe (öffentlich)
 
+**26.11.2026 – Original-Wordmark im Portal LIVE:** PR #30, Merge `ecf83e3fb5bc44ea8dd0f48ee6e264578934990f`, Render `dep-dc49a8o473hc739b6fbg`, live seit 21:23:32 CET. Original-PNG `assets/chargevisor-login-white.png` für gemeinsame Seitenleiste (alle Rollen/Menüs), Demo und PDF-Berichte; PDF-Logo proportional im bisherigen Rahmen. Login-Dateien, CSS, Icons, Funktionen, Premium-Gating, Backend/OCPP/DB/BLITZ unverändert. Alte SVG nur für Sonderansichten der Login-Datei erhalten. Prüfcommit `7847ea09cc56340f7b5e8369bffb61d12678f3f0`: 6/6 CI, 96/96 Node, 24/24 Chromium; PDF-Test nach cachebedingtem Timeout auf tatsächlich gezeichnetes Bild umgestellt. Render-Build 96/96, historische Transaktionen per Fingerprint unverändert. Rücksprung `backup/pre-brand-logo-20261126`. Direkte visuelle Produktionsabnahme offen.
+
+
 **26.11.2026 – Wordmark-Austausch (PR #30, noch nicht live):** Original-PNG `assets/chargevisor-login-white.png` identisch zum erneuten Nutzerupload (Git-Blob `1322e9cfd322d173508536fabd9fab4e1bc55b71`, 1962 × 801). Nur Logo-Referenz in app.html und index.html (gemeinsame Seitenleiste aller Rollen und Menüs) und PDF-Logo in exports.js (proportional im bisherigen Rahmen). Login HTML/JS, CSS, Icons, Premium-Regeln, Backend, OCPP, Datenbank und BLITZ unverändert. Alte SVG bleibt für Sonderansichten der Login-Datei erhalten. Prüfcommit `5f70fe8388edf6dac7af454c78598a81b4b575d4`, Rücksprung `backup/pre-brand-logo-20261126`. CI/Deploy ausstehend.
 
 
