@@ -785,7 +785,11 @@ test('Shared login-only anthracite design preserves login, password visibility a
   await page.setViewportSize({width:1380,height:763});
   await page.goto('http://127.0.0.1:10000/login');
   await expect(page.locator('#login-panel')).toBeVisible();
-  await expect(page.locator('body')).toHaveCSS('background-color','rgb(33, 36, 40)');
+  await expect(page.locator('body')).toHaveCSS('background-color','rgb(10, 13, 21)');
+  await expect(page.locator('body')).toHaveCSS('background-image',/radial-gradient/);
+  await expect(page.locator('#login-form button[type="submit"]')).toHaveCSS('background-image',/linear-gradient/);
+  await page.locator('#email').focus();
+  await expect(page.locator('#email')).toHaveCSS('border-top-color','rgb(0, 241, 245)');
   await expect(page.locator('.login-brand')).toBeVisible();
   await expect(page.locator('.login-visual')).toBeHidden();
   await expect(page.locator('footer')).toContainText('Ihr Partner für Ladeinfrastruktur');
