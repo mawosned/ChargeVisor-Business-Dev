@@ -25,6 +25,7 @@ const files = {
   '/assets/login-wallbox.webp': ['assets/login-wallbox.webp', 'image/webp'],
   '/assets/lumina-thumb.svg': ['assets/lumina-thumb.svg', 'image/svg+xml'],
   '/assets/chargevisor-logo.svg': ['assets/chargevisor-logo.svg', 'image/svg+xml'],
+  '/assets/chargevisor-login-white.png': ['assets/chargevisor-login-white.png', 'image/png'],
   '/assets/walectra-logo.webp': ['assets/walectra-logo.webp', 'image/webp'],
   '/favicon.ico': ['assets/favicon-32.png', 'image/png'],
   '/apple-touch-icon.png': ['assets/apple-touch-icon.png', 'image/png'],
