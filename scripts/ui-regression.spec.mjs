@@ -791,6 +791,10 @@ test('Shared login-only anthracite design preserves login, password visibility a
   await page.locator('#email').focus();
   await expect(page.locator('#email')).toHaveCSS('border-top-color','rgb(0, 241, 245)');
   await expect(page.locator('.login-brand')).toBeVisible();
+  await expect(page.locator('.login-brand')).toHaveAttribute('src','/assets/chargevisor-login-white.png');
+  await expect.poll(()=>page.locator('.login-brand').evaluate(img=>[img.complete,img.naturalWidth,img.naturalHeight])).toEqual([true,1962,801]);
+  await expect(page.locator('#portalLanguage')).toBeHidden();
+  await expect(page.locator('header a[href="/app"]')).toBeHidden();
   await expect(page.locator('.login-visual')).toBeHidden();
   await expect(page.locator('footer')).toContainText('Ihr Partner für Ladeinfrastruktur');
   await expect(page.locator('#email')).toHaveValue('');
@@ -809,6 +813,8 @@ test('Shared login-only anthracite design preserves login, password visibility a
   await expect(page.locator('#reset-email')).toHaveValue('synthetic@example.test');
   await expect(page.locator('body')).toHaveCSS('background-color','rgb(255, 255, 255)');
   await expect(page.locator('.login-brand')).toBeHidden();
+  await expect(page.locator('#portalLanguage')).toBeVisible();
+  await expect(page.locator('header a[href="/app"]')).toBeVisible();
   await page.locator('#reset-request-back').click();
   await expect(page.locator('#login-panel')).toBeVisible();
   await page.setViewportSize({width:375,height:667});
