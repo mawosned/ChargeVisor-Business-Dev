@@ -824,3 +824,39 @@ test('Shared login-only anthracite design preserves login, password visibility a
   await expect(page).toHaveURL(/\/app$/);
   expect(submitted).toEqual({email:'synthetic@example.test',password:'synthetic-test-password'});
 });
+
+
+test('Login uses the approved dark theme before auth responds and on refresh, including a failed status request',async({page})=>{
+  let releaseStatus;
+  let statusGate=new Promise(resolve=>{releaseStatus=resolve;});
+  let failStatus=false;
+  await page.route('**/api/auth/**',async route=>{
+    const path=new URL(route.request().url()).pathname;
+    if(path==='/api/auth/status'){
+      await statusGate;
+      return route.fulfill(failStatus?{status:503,json:{error:'Synthetic outage'}}:{json:{ready:true}});
+    }
+    if(path==='/api/auth/me')return route.fulfill({status:401,json:{error:'Not authenticated'}});
+    throw Error('Unexpected auth request '+path);
+  });
+  await page.goto('/login',{waitUntil:'domcontentloaded'});
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('body')).toHaveClass(/login-screen/);
+  await expect(page.locator('body')).toHaveCSS('background-color','rgb(10, 13, 21)');
+  await expect(page.locator('.login-brand')).toBeVisible();
+  await expect(page.locator('header .logo')).toBeHidden();
+  await expect(page.locator('.login-visual')).toBeHidden();
+  await expect(page.locator('#portalLanguage')).toBeHidden();
+  releaseStatus();
+  await expect(page.locator('#login-panel')).toBeVisible();
+  await expect(page.locator('body')).toHaveCSS('background-color','rgb(10, 13, 21)');
+  statusGate=new Promise(resolve=>{releaseStatus=resolve;});
+  failStatus=true;
+  await page.reload({waitUntil:'domcontentloaded'});
+  await expect(page.locator('#state-panel')).toBeVisible();
+  await expect(page.locator('body')).toHaveCSS('background-color','rgb(10, 13, 21)');
+  await expect(page.locator('.login-visual')).toBeHidden();
+  releaseStatus();
+  await expect(page.locator('#state-text')).toContainText('Synthetic outage');
+  await expect(page.locator('body')).toHaveCSS('background-color','rgb(10, 13, 21)');
+});
